@@ -91,12 +91,13 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BookOpen, Video, Layers, BookMarked,
-  DollarSign, Users, ChevronRight, GraduationCap, Package
+  DollarSign, Users, ChevronRight, GraduationCap, Package,
+  ShoppingCart, UserCheck,
 } from 'lucide-react'
 import './Sidebar.css'
 import Logo from '../Assets/Logo.png'
 import AdminProfile from './AdminProfile'
- 
+
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/classes', icon: GraduationCap, label: 'Classes' },
@@ -107,6 +108,8 @@ const nav = [
   { to: '/products', icon: Package, label: 'Product Master' },
   { to: '/prices', icon: DollarSign, label: 'Pricing' },
   { to: '/users', icon: Users, label: 'Users' },
+  { to: '/orders', icon: ShoppingCart, label: 'Orders' },
+  { to: '/enrollments', icon: UserCheck, label: 'Enrollments' },
 ]
  
 export default function Sidebar({ open, onClose }) {

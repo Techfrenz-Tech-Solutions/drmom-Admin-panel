@@ -1,13 +1,8 @@
-import { useState } from 'react'
-import { useApp } from '../context/AppContext'
-import { Plus, Edit2, Trash2, Video } from 'lucide-react'
-
-const COURSES = [
-  'LKG Complete Course',
-  'UKG Mathematics',
-  '1st Grade Science',
-  'General Course',
-]
+import { useEffect, useRef, useState } from 'react'
+import { Plus, Edit2, Trash2, Video, Upload, CheckCircle, Loader } from 'lucide-react'
+import * as tus from 'tus-js-client'
+import { apiRequest } from '../utils/api'
+import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
 
 const EMPTY = {
   lessonCode:  '',
@@ -16,73 +11,178 @@ const EMPTY = {
   subjectName: '',
   courseName:  '',
   chapterName: '',
+  bunnyVideoId: '',
+  bunnyEmbedUrl: '',
+  thumbnailUrl: '',
+  durationSeconds: '',
+  priceInPaise: '',
+  isPreview: false,
 }
 
-export default function Videos() {
-  const { data, CLASSES, SUBJECTS, addVideo, updateVideo, deleteVideo } = useApp()
+const toLessonRow = (lesson, course) => ({
+  id: lesson.id,
+  lessonCode: lesson.code || '',
+  lessonName: lesson.title,
+  className: course.classLabel || course.classId || '',
+  subjectName: course.subject || '',
+  courseName: course.title,
+  courseId: course.id,
+  chapterName: lesson.chapterTitle || '',
+  bunnyVideoId: lesson.bunnyVideoId || '',
+  bunnyEmbedUrl: lesson.bunnyEmbedUrl || '',
+  thumbnailUrl: lesson.thumbnailUrl || '',
+  durationSeconds: lesson.durationSeconds || '',
+  priceInPaise: lesson.priceInPaise || '',
+  isPreview: Boolean(lesson.isPreview),
+  raw: lesson,
+})
 
-  const [lessons, setLessons] = useState(
-    data.videos.map((v, i) => {
-      const chapter = data.chapters.find(c => c.id === v.chapterId)
-      return {
-        id:          v.id,
-        lessonCode:  `LES-${String(i + 1).padStart(3, '0')}`,
-        lessonName:  v.title,
-        className:   v.class,
-        subjectName: v.subject,
-        courseName:  '',
-        chapterName: chapter?.title || '',
-      }
-    })
-  )
-  const [nextId, setNextId]       = useState(100)
+export default function Videos() {
+  const [catalog, setCatalog] = useState({ classes: [], subjects: [], chapters: [] })
+  const [courses, setCourses] = useState([])
+  const [lessons, setLessons] = useState([])
   const [form, setForm]           = useState(EMPTY)
   const [editingId, setEditingId] = useState(null)
   const [error, setError]         = useState('')
+  const [loading, setLoading]     = useState(false)
+
+  const [uploadProgress, setUploadProgress] = useState(0)   // 0-100
+  const [uploadStatus, setUploadStatus] = useState('')       // ''|'uploading'|'processing'|'ready'|'error'
+  const [uploadMsg, setUploadMsg] = useState('')
+  const fileInputRef = useRef(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const reset = () => { setForm(EMPTY); setEditingId(null); setError('') }
 
-  // Chapters filtered by selected class
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadStatus('uploading')
+    setUploadProgress(0)
+    setUploadMsg('Initialising upload…')
+
+    try {
+      // Step 1 — Our backend creates the video in Bunny and returns TUS credentials.
+      //           No file data touches the VM.
+      const creds = await apiRequest('/admin/bunny/videos/init', {
+        method: 'POST',
+        body: JSON.stringify({ title: form.lessonName.trim() || file.name }),
+      })
+
+      set('bunnyVideoId', creds.videoGuid)
+      set('bunnyEmbedUrl', creds.embedUrl)
+      if (creds.thumbnailUrl) set('thumbnailUrl', creds.thumbnailUrl)
+
+      // Step 2 — Browser uploads directly to Bunny via TUS (zero VM bandwidth)
+      await new Promise((resolve, reject) => {
+        const upload = new tus.Upload(file, {
+          endpoint: creds.tusEndpoint,
+          retryDelays: [0, 3000, 5000, 10000],
+          headers: {
+            AuthorizationSignature: creds.authSignature,
+            AuthorizationExpire: String(creds.authExpire),
+            VideoId: creds.videoGuid,
+            LibraryId: String(creds.libraryId),
+          },
+          metadata: { filetype: file.type, title: form.lessonName.trim() || file.name },
+          onProgress: (uploaded, total) => {
+            setUploadProgress(Math.round((uploaded / total) * 90))
+            setUploadMsg(`Uploading… ${Math.round((uploaded / total) * 100)}%`)
+          },
+          onSuccess: () => resolve(),
+          onError: (err) => reject(err),
+        })
+        upload.start()
+      })
+
+      setUploadProgress(95)
+      setUploadStatus('processing')
+      setUploadMsg('Upload done — Bunny is encoding…')
+
+      // Step 3 — Poll until Bunny finishes encoding (status 4)
+      for (let i = 0; i < 36; i++) {
+        await new Promise(r => setTimeout(r, 5000))
+        try {
+          const s = await apiRequest(`/admin/bunny/videos/${creds.videoGuid}/status`)
+          if (s.ready) { setUploadProgress(100); setUploadStatus('ready'); setUploadMsg('Video ready ✓'); return }
+          if (s.status === 5 || s.status === 6) throw new Error(s.statusLabel)
+          setUploadMsg(`Encoding… (${s.statusLabel})`)
+        } catch (pollErr) {
+          if (pollErr.message !== 'Request failed') throw pollErr
+        }
+      }
+      // Still encoding after 3 min — that's fine, just let them save the lesson
+      setUploadProgress(100)
+      setUploadStatus('ready')
+      setUploadMsg('Uploaded — encoding in background')
+
+    } catch (err) {
+      setUploadStatus('error')
+      setUploadMsg(err.message || 'Upload failed')
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const loadCourses = async () => {
+    const [result, catalogData] = await Promise.all([apiRequest('/admin/courses'), loadAdminCatalog()])
+    const loaded = result.courses || []
+    setCatalog(catalogData)
+    setCourses(loaded)
+    setLessons(loaded.flatMap(course => (course.lessons || []).map(lesson => toLessonRow(lesson, course))))
+  }
+
+  useEffect(() => {
+    loadCourses().catch((error) => setError(error.message))
+  }, [])
+
   const filteredChapters = form.className
-    ? data.chapters.filter(c => c.class === form.className)
-    : data.chapters
+    ? (catalog.chapters || []).filter(c => c.classLabel === form.className)
+    : (catalog.chapters || [])
 
   /* ---------- Create ---------- */
-  const handleCreate = () => {
+  const buildPayload = (course) => ({
+    code: form.lessonCode.trim(),
+    title: form.lessonName.trim(),
+    description: `${form.lessonName.trim()} lesson`,
+    orderIndex: editingId
+      ? (lessons.find(lesson => lesson.id === editingId)?.raw?.orderIndex || lessons.findIndex(lesson => lesson.id === editingId) + 1 || 1)
+      : (course.lessons?.length || 0) + 1,
+    chapterTitle: form.chapterName || undefined,
+    chapterIndex: form.chapterName
+      ? (catalog.chapters || []).find(c => c.title === form.chapterName)?.orderIndex || 1
+      : undefined,
+    durationSeconds: form.durationSeconds ? Number(form.durationSeconds) : undefined,
+    thumbnailUrl: form.thumbnailUrl,
+    priceInPaise: form.priceInPaise ? Number(form.priceInPaise) : undefined,
+    isPreview: Boolean(form.isPreview),
+    bunnyVideoId: form.bunnyVideoId,
+    bunnyEmbedUrl: form.bunnyEmbedUrl,
+  })
+
+  const handleCreate = async () => {
     const { lessonCode, lessonName, className, subjectName } = form
     if (!lessonCode.trim()) { setError('Lesson Code is required');  return }
     if (!lessonName.trim()) { setError('Lesson Name is required');  return }
     if (!className)         { setError('Class Name is required');   return }
     if (!subjectName)       { setError('Subject Name is required'); return }
 
-    const chapter = data.chapters.find(c => c.title === form.chapterName)
-    addVideo({
-      title:     lessonName.trim(),
-      class:     className,
-      subject:   subjectName,
-      chapterId: chapter?.id || '',
-      duration:  '',
-      url:       '',
-      thumbnail: '',
-      order:     lessons.length + 1,
-      free:      false,
-    })
+    const course = courses.find(c => c.title === form.courseName)
+    if (!course) { setError('Course Name is required'); return }
 
-    setLessons(prev => [
-      ...prev,
-      {
-        id:          nextId,
-        lessonCode:  lessonCode.trim(),
-        lessonName:  lessonName.trim(),
-        className,
-        subjectName,
-        courseName:  form.courseName,
-        chapterName: form.chapterName,
-      },
-    ])
-    setNextId(n => n + 1)
-    reset()
+    setLoading(true)
+    try {
+      await apiRequest(`/admin/courses/${course.id}/lessons`, {
+        method: 'POST',
+        body: JSON.stringify(buildPayload(course)),
+      })
+      await loadCourses()
+      reset()
+    } catch (error) {
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   /* ---------- Load row for edit ---------- */
@@ -95,51 +195,53 @@ export default function Videos() {
       subjectName: l.subjectName,
       courseName:  l.courseName,
       chapterName: l.chapterName,
+      bunnyVideoId: l.bunnyVideoId,
+      bunnyEmbedUrl: l.bunnyEmbedUrl,
+      thumbnailUrl: l.thumbnailUrl,
+      durationSeconds: String(l.durationSeconds || ''),
+      priceInPaise: String(l.priceInPaise || ''),
+      isPreview: l.isPreview,
     })
     setError('')
   }
 
   /* ---------- Update ---------- */
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     const { lessonName, className, subjectName } = form
     if (!lessonName.trim()) { setError('Lesson Name is required');  return }
     if (!className)         { setError('Class Name is required');   return }
     if (!subjectName)       { setError('Subject Name is required'); return }
 
     const original = lessons.find(l => l.id === editingId)
-    if (original) {
-      const chapter = data.chapters.find(c => c.title === form.chapterName)
-      updateVideo(original.id, {
-        title:     lessonName.trim(),
-        class:     className,
-        subject:   subjectName,
-        chapterId: chapter?.id || '',
-      })
-    }
+    const course = courses.find(c => c.id === original?.courseId || c.title === form.courseName)
+    if (!course) { setError('Course Name is required'); return }
 
-    setLessons(prev =>
-      prev.map(l =>
-        l.id === editingId
-          ? {
-              ...l,
-              lessonCode:  form.lessonCode.trim(),
-              lessonName:  lessonName.trim(),
-              className,
-              subjectName,
-              courseName:  form.courseName,
-              chapterName: form.chapterName,
-            }
-          : l
-      )
-    )
-    reset()
+    setLoading(true)
+    try {
+      await apiRequest(`/admin/courses/${course.id}/lessons/${editingId}`, {
+        method: 'PUT',
+        body: JSON.stringify(buildPayload(course)),
+      })
+      await loadCourses()
+      reset()
+    } catch (error) {
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   /* ---------- Delete ---------- */
-  const handleDelete = (id) => {
-    deleteVideo(id)
-    setLessons(prev => prev.filter(l => l.id !== id))
-    if (editingId === id) reset()
+  const handleDelete = async (id) => {
+    const lesson = lessons.find(l => l.id === id)
+    if (!lesson) return
+    try {
+      await apiRequest(`/admin/courses/${lesson.courseId}/lessons/${id}`, { method: 'DELETE' })
+      setLessons(prev => prev.filter(l => l.id !== id))
+      if (editingId === id) reset()
+    } catch (error) {
+      setError(error.message)
+    }
   }
 
   return (
@@ -192,7 +294,7 @@ export default function Videos() {
               }}
             >
               <option value="">— Select Class —</option>
-              {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+              {classNames(catalog).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
@@ -204,7 +306,7 @@ export default function Videos() {
               onChange={e => { set('subjectName', e.target.value); setError('') }}
             >
               <option value="">— Select Subject —</option>
-              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+              {subjectNames(catalog).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         </div>
@@ -219,7 +321,7 @@ export default function Videos() {
               onChange={e => set('courseName', e.target.value)}
             >
               <option value="">— Select Course —</option>
-              {COURSES.map(c => <option key={c} value={c}>{c}</option>)}
+              {courses.map(c => <option key={c.id} value={c.title}>{c.title}</option>)}
             </select>
           </div>
 
@@ -238,16 +340,86 @@ export default function Videos() {
           </div>
         </div>
 
+        {/* Upload to Bunny */}
+        <div className="card" style={{ marginBottom: 14, background: 'var(--bg2)', border: '1px dashed var(--border)', boxShadow: 'none', padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
+            Upload Video to Bunny CDN
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              style={{ display: 'none' }}
+              onChange={handleVideoUpload}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              {uploadStatus === 'uploading' || uploadStatus === 'processing'
+                ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                : uploadStatus === 'ready'
+                  ? <CheckCircle size={14} color="var(--green, #22c55e)" />
+                  : <Upload size={14} />}
+              {uploadStatus === 'uploading' ? `Uploading ${uploadProgress}%` : 'Choose Video File'}
+            </button>
+            {uploadStatus === 'uploading' && (
+              <div style={{ flex: 1, minWidth: 120, height: 6, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${uploadProgress}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
+              </div>
+            )}
+            {uploadMsg && (
+              <span style={{ fontSize: 12, color: uploadStatus === 'error' ? 'var(--red)' : uploadStatus === 'ready' ? 'var(--green, #22c55e)' : 'var(--text3)' }}>
+                {uploadMsg}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Bunny Video ID</label>
+            <input className="input" value={form.bunnyVideoId} onChange={e => set('bunnyVideoId', e.target.value)} placeholder="Auto-filled on upload" />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Bunny Embed URL</label>
+            <input className="input" value={form.bunnyEmbedUrl} onChange={e => set('bunnyEmbedUrl', e.target.value)} placeholder="Auto-filled on upload" />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 14, marginBottom: 14, alignItems: 'end' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Thumbnail URL</label>
+            <input className="input" value={form.thumbnailUrl} onChange={e => set('thumbnailUrl', e.target.value)} />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Duration Seconds</label>
+            <input className="input" type="number" min="0" value={form.durationSeconds} onChange={e => set('durationSeconds', e.target.value)} />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Price Paise</label>
+            <input className="input" type="number" min="0" value={form.priceInPaise} onChange={e => set('priceInPaise', e.target.value)} />
+          </div>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <input type="checkbox" checked={form.isPreview} onChange={e => set('isPreview', e.target.checked)} />
+            Preview
+          </label>
+        </div>
+
         {/* Buttons + Error */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {editingId === null ? (
-            <button className="btn btn-primary" onClick={handleCreate}>
-              <Plus size={14} /> Create
+            <button className="btn btn-primary" onClick={handleCreate} disabled={loading}>
+              <Plus size={14} /> {loading ? 'Saving...' : 'Create'}
             </button>
           ) : (
             <>
-              <button className="btn btn-primary" onClick={handleUpdate}>
-                <Edit2 size={14} /> Update
+              <button className="btn btn-primary" onClick={handleUpdate} disabled={loading}>
+                <Edit2 size={14} /> {loading ? 'Saving...' : 'Update'}
               </button>
               <button className="btn btn-ghost" onClick={reset}>
                 Cancel

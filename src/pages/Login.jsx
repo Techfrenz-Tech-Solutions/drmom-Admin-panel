@@ -201,6 +201,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, LogIn, X, KeyRound, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import Logo from '../Assets/Logo.png'
+import { loginAdmin } from '../utils/api'
 import './Login.css'
  
 function ForgotPasswordModal({ onClose }) {
@@ -282,14 +283,14 @@ function ForgotPasswordModal({ onClose }) {
  
 export default function Login() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('admin@drmom.in')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
  
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
  
@@ -299,12 +300,19 @@ export default function Login() {
     }
  
     setLoading(true)
-    setTimeout(() => {
-      // Write token first, then hard-navigate so ProtectedRoute re-reads it cleanly
-      localStorage.setItem('authToken', 'admin-token-' + Date.now())
-      localStorage.setItem('adminEmail', email.trim())
+    try {
+      const data = await loginAdmin({ email: email.trim(), password })
+      if (data.user?.role !== 'ADMIN') {
+        throw new Error('Admin access required')
+      }
+      localStorage.setItem('authToken', 'cookie-session')
+      localStorage.setItem('adminEmail', data.user.email)
+      localStorage.setItem('adminName', data.user.name)
       window.location.replace('/')
-    }, 800)
+    } catch (error) {
+      setError(error.message || 'Login failed')
+      setLoading(false)
+    }
   }
  
   return (

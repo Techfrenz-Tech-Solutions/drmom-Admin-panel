@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, User, Mail, Lock, Shield, LogOut, Eye, EyeOff, CheckCircle } from 'lucide-react'
+import { logoutAdmin } from '../utils/api'
 import './AdminProfile.css'
 
 export default function AdminProfile({ onClose }) {
@@ -11,7 +12,10 @@ export default function AdminProfile({ onClose }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const [profile, setProfile] = useState({ name: 'Admin', email: 'admin@drmom.in' })
+  const [profile, setProfile] = useState({
+    name: localStorage.getItem('adminName') || 'Admin',
+    email: localStorage.getItem('adminEmail') || 'admin@drmom.local',
+  })
   const [pw, setPw] = useState({ old: '', new: '', confirm: '' })
   const [pwError, setPwError] = useState('')
 
@@ -30,9 +34,15 @@ export default function AdminProfile({ onClose }) {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await logoutAdmin()
+    } catch (error) {
+      // local state still needs clearing if the server session is already gone
+    }
     localStorage.removeItem('authToken')
     localStorage.removeItem('adminEmail')
+    localStorage.removeItem('adminName')
     navigate('/login')
   }
 

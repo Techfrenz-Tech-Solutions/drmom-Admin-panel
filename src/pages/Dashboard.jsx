@@ -1,19 +1,30 @@
-import React from 'react'
-import { useApp } from '../context/AppContext'
+import React, { useEffect, useState } from 'react'
 import { Users, Video, Layers, DollarSign, GraduationCap, BookMarked, TrendingUp, Clock } from 'lucide-react'
+import { loadAdminDashboard, secondsToLabel } from '../utils/adminData'
 
 export default function Dashboard() {
-  const { data } = useApp()
+  const [dashboard, setDashboard] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadAdminDashboard()
+      .then(setDashboard)
+      .catch((error) => setError(error.message))
+  }, [])
+
+  const statsData = dashboard?.stats || {}
+  const recentUsers = dashboard?.recentUsers || []
+  const recentLessons = dashboard?.recentLessons || []
 
   const stats = [
-    { label: 'Total Users', value: data.users.length, icon: Users, color: '#6c63ff', bg: 'rgba(108,99,255,0.15)' },
-    { label: 'Active Users', value: data.users.filter(u => u.status === 'active').length, icon: TrendingUp, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
-    { label: 'Classes', value: data.classes.length, icon: GraduationCap, color: '#ff6b9d', bg: 'rgba(255,107,157,0.15)' },
-    { label: 'Subjects', value: data.subjects.length, icon: BookMarked, color: '#ffa94d', bg: 'rgba(255,169,77,0.15)' },
-    { label: 'Chapters', value: data.chapters.length, icon: Layers, color: '#6c63ff', bg: 'rgba(108,99,255,0.15)' },
-    { label: 'Lesson Videos', value: data.videos.length, icon: Video, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
-    { label: 'Pricing Plans', value: data.prices.length, icon: DollarSign, color: '#ff6b9d', bg: 'rgba(255,107,157,0.15)' },
-    { label: 'Free Videos', value: data.videos.filter(v => v.free).length, icon: Clock, color: '#ffa94d', bg: 'rgba(255,169,77,0.15)' },
+    { label: 'Total Users', value: statsData.users || 0, icon: Users, color: '#6c63ff', bg: 'rgba(108,99,255,0.15)' },
+    { label: 'Active Users', value: statsData.activeUsers || 0, icon: TrendingUp, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
+    { label: 'Classes', value: statsData.classes || 0, icon: GraduationCap, color: '#ff6b9d', bg: 'rgba(255,107,157,0.15)' },
+    { label: 'Subjects', value: statsData.subjects || 0, icon: BookMarked, color: '#ffa94d', bg: 'rgba(255,169,77,0.15)' },
+    { label: 'Chapters', value: statsData.chapters || 0, icon: Layers, color: '#6c63ff', bg: 'rgba(108,99,255,0.15)' },
+    { label: 'Lesson Videos', value: statsData.lessons || 0, icon: Video, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
+    { label: 'Pricing Plans', value: statsData.pricingPlans || 0, icon: DollarSign, color: '#ff6b9d', bg: 'rgba(255,107,157,0.15)' },
+    { label: 'Free Videos', value: statsData.freeLessons || 0, icon: Clock, color: '#ffa94d', bg: 'rgba(255,169,77,0.15)' },
   ]
 
   return (
@@ -24,6 +35,8 @@ export default function Dashboard() {
           <p>Welcome back! Here's what's happening with Dr Mom 2.0</p>
         </div>
       </div>
+
+      {error && <div style={{ marginBottom: 12, color: 'var(--red)', fontSize: 13 }}>{error}</div>}
 
       <div className="stat-grid">
         {stats.map(s => (
@@ -42,8 +55,6 @@ export default function Dashboard() {
       <div className="dash-tables-grid">
         <div className="card">
           <h3 style={{ fontFamily: 'var(--font-head)', marginBottom: 14, color: 'var(--text)', fontSize: 15 }}>Recent Users</h3>
-
-          {/* Desktop table */}
           <div className="table-wrap dash-table-desktop">
             <table>
               <thead>
@@ -55,14 +66,14 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {data.users.slice(0, 5).map(u => (
+                {recentUsers.map(u => (
                   <tr key={u.id}>
                     <td style={{ color: 'var(--text)' }}>{u.name}</td>
-                    <td>{u.class}</td>
-                    <td>{u.plan}</td>
+                    <td>{u.gradeLabel || '-'}</td>
+                    <td>{u.courseAccess?.[0]?.course?.title || '-'}</td>
                     <td>
-                      <span className={`badge ${u.status === 'active' ? 'badge-green' : 'badge-red'}`}>
-                        {u.status}
+                      <span className={`badge ${u.isActive ? 'badge-green' : 'badge-red'}`}>
+                        {u.isActive ? 'active' : 'inactive'}
                       </span>
                     </td>
                   </tr>
@@ -70,18 +81,16 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-
-          {/* Mobile cards */}
           <div className="dash-mobile-list">
-            {data.users.slice(0, 5).map(u => (
+            {recentUsers.map(u => (
               <div className="dash-mobile-row" key={u.id}>
                 <div className="dash-mobile-main">
                   <span className="dash-mobile-name">{u.name}</span>
-                  <span className={`badge ${u.status === 'active' ? 'badge-green' : 'badge-red'}`}>{u.status}</span>
+                  <span className={`badge ${u.isActive ? 'badge-green' : 'badge-red'}`}>{u.isActive ? 'active' : 'inactive'}</span>
                 </div>
                 <div className="dash-mobile-meta">
-                  <span>Class: <strong>{u.class}</strong></span>
-                  <span>Plan: <strong>{u.plan}</strong></span>
+                  <span>Class: <strong>{u.gradeLabel || '-'}</strong></span>
+                  <span>Plan: <strong>{u.courseAccess?.[0]?.course?.title || '-'}</strong></span>
                 </div>
               </div>
             ))}
@@ -90,8 +99,6 @@ export default function Dashboard() {
 
         <div className="card">
           <h3 style={{ fontFamily: 'var(--font-head)', marginBottom: 14, color: 'var(--text)', fontSize: 15 }}>Recent Videos</h3>
-
-          {/* Desktop table */}
           <div className="table-wrap dash-table-desktop">
             <table>
               <thead>
@@ -103,14 +110,14 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {data.videos.slice(0, 5).map(v => (
+                {recentLessons.map(v => (
                   <tr key={v.id}>
                     <td style={{ color: 'var(--text)' }}>{v.title}</td>
-                    <td>{v.class}</td>
-                    <td>{v.duration}</td>
+                    <td>{v.classLabel || '-'}</td>
+                    <td>{secondsToLabel(v.durationSeconds) || '-'}</td>
                     <td>
-                      <span className={`badge ${v.free ? 'badge-green' : 'badge-blue'}`}>
-                        {v.free ? 'Free' : 'Premium'}
+                      <span className={`badge ${v.isPreview ? 'badge-green' : 'badge-blue'}`}>
+                        {v.isPreview ? 'Free' : 'Premium'}
                       </span>
                     </td>
                   </tr>
@@ -118,18 +125,16 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-
-          {/* Mobile cards */}
           <div className="dash-mobile-list">
-            {data.videos.slice(0, 5).map(v => (
+            {recentLessons.map(v => (
               <div className="dash-mobile-row" key={v.id}>
                 <div className="dash-mobile-main">
                   <span className="dash-mobile-name">{v.title}</span>
-                  <span className={`badge ${v.free ? 'badge-green' : 'badge-blue'}`}>{v.free ? 'Free' : 'Premium'}</span>
+                  <span className={`badge ${v.isPreview ? 'badge-green' : 'badge-blue'}`}>{v.isPreview ? 'Free' : 'Premium'}</span>
                 </div>
                 <div className="dash-mobile-meta">
-                  <span>Class: <strong>{v.class}</strong></span>
-                  <span>Duration: <strong>{v.duration}</strong></span>
+                  <span>Class: <strong>{v.classLabel || '-'}</strong></span>
+                  <span>Duration: <strong>{secondsToLabel(v.durationSeconds) || '-'}</strong></span>
                 </div>
               </div>
             ))}

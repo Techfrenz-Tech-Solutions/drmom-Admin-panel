@@ -13,6 +13,8 @@ import Prices from './pages/Prices'
 import Users from './pages/Users'
 import Courses from './pages/Courses'
 import ProductMaster from './pages/ProductMaster'
+import Orders from './pages/Orders'
+import Enrollments from './pages/Enrollments'
 
 const PAGE_TITLES = {
   '/': 'Dashboard',
@@ -20,10 +22,12 @@ const PAGE_TITLES = {
   '/subjects': 'Subjects',
   '/courses': 'Courses',
   '/chapters': 'Chapters',
-  '/lesson': 'Lesson Master',
+  '/videos': 'Lesson Master',
   '/products': 'Product Master',
   '/prices': 'Pricing',
   '/users': 'Users',
+  '/orders': 'Orders',
+  '/enrollments': 'Enrollments',
 }
 
 function ProtectedRoute({ children }) {
@@ -64,6 +68,8 @@ function Layout() {
             <Route path="/products" element={<ProductMaster />} />
             <Route path="/prices" element={<Prices />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/enrollments" element={<Enrollments />} />
           </Routes>
         </main>
       </div>
