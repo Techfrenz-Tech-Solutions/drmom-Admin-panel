@@ -134,7 +134,7 @@ export default function AdminProfile({ onClose }) {
                   <button className="ap-eye" onClick={() => setShowOld(v => !v)}>
                     {showOld ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-            ccc     </div>
+                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">New Password</label>
