@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://106.51.20.225:28100/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 let _refreshing = null;
 
