@@ -104,7 +104,7 @@ const nav = [
   { to: '/subjects', icon: BookMarked, label: 'Subjects' },
   { to: '/courses', icon: BookOpen, label: 'Courses' },
   { to: '/chapters', icon: Layers, label: 'Chapters' },
-  { to: '/videos', icon: Video, label: 'Lesson Master' },
+  // { to: '/videos', icon: Video, label: 'Lesson Master' },
   { to: '/products', icon: Package, label: 'Product Master' },
   { to: '/prices', icon: DollarSign, label: 'Pricing' },
   { to: '/users', icon: Users, label: 'Users' },

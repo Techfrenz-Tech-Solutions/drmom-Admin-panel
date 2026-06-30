@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Users, Video, Layers, DollarSign, GraduationCap, BookMarked, TrendingUp, Clock } from 'lucide-react'
+import { Users, Video, Layers, DollarSign, GraduationCap, BookMarked, TrendingUp, Clock, UserCheck } from 'lucide-react'
 import { loadAdminDashboard, secondsToLabel } from '../utils/adminData'
 
 export default function Dashboard() {
@@ -18,6 +18,7 @@ export default function Dashboard() {
 
   const stats = [
     { label: 'Total Users', value: statsData.users || 0, icon: Users, color: '#6c63ff', bg: 'rgba(108,99,255,0.15)' },
+     { label: 'Subscribed Users', value: statsData.subscribedUsers || 0, icon: UserCheck, color: '#6c63ff', bg: 'rgba(108,99,255,0.15)' },
     { label: 'Active Users', value: statsData.activeUsers || 0, icon: TrendingUp, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
     { label: 'Classes', value: statsData.classes || 0, icon: GraduationCap, color: '#ff6b9d', bg: 'rgba(255,107,157,0.15)' },
     { label: 'Subjects', value: statsData.subjects || 0, icon: BookMarked, color: '#ffa94d', bg: 'rgba(255,169,77,0.15)' },
@@ -25,6 +26,7 @@ export default function Dashboard() {
     { label: 'Lesson Videos', value: statsData.lessons || 0, icon: Video, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
     { label: 'Pricing Plans', value: statsData.pricingPlans || 0, icon: DollarSign, color: '#ff6b9d', bg: 'rgba(255,107,157,0.15)' },
     { label: 'Free Videos', value: statsData.freeLessons || 0, icon: Clock, color: '#ffa94d', bg: 'rgba(255,169,77,0.15)' },
+  { label: 'Active Users', value: statsData.activeUsers || 0, icon: TrendingUp, color: '#00d4aa', bg: 'rgba(0,212,170,0.15)' },
   ]
 
   return (
