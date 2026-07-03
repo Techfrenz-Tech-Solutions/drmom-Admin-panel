@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, ClipboardList, X, CheckCircle } from 'lucide-react'
+import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, ClipboardList, X, CheckCircle, Eye, RotateCcw } from 'lucide-react'
 import * as tus from 'tus-js-client'
 import { apiRequest, API_BASE_URL } from '../utils/api'
 import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
@@ -12,6 +12,14 @@ const emptyForm = {
   subjectName: '',
   videoFile: null,
   pdfFile: null,
+  // Existing file state, populated on Edit — null in Create mode since
+  // there's nothing to keep/replace/remove yet.
+  existingVideoUrl: null,
+  existingPdfUrl: null,
+  existingPdfPreviewUrl: null,
+  existingPdfFileName: null,
+  removeVideo: false,        // admin explicitly removed the existing video
+  removePdf: false,          // admin explicitly removed the existing PDF
   assessments: [],           // empty = table hidden until "Add Question" clicked
 }
 
@@ -135,6 +143,22 @@ export default function Chapters() {
     }
   }
 
+  // ─── Resolve video/PDF for save ────────────────────────────────────────────
+  // Three-way outcome per file: a new upload replaces it, an explicit remove
+  // clears it, or — the common case — nothing changed and the existing file
+  // (if any) is preserved by simply omitting the key from the payload.
+  const resolveVideo = async () => {
+    if (form.videoFile) return await uploadVideoToBunny(form.videoFile)
+    if (form.removeVideo) return ''
+    return undefined
+  }
+
+  const resolvePdf = async () => {
+    if (form.pdfFile) return await uploadPdfFile(form.pdfFile)
+    if (form.removePdf) return { storagePath: '', fileName: '', mimeType: '', size: undefined }
+    return undefined
+  }
+
   // ─── Payload ──────────────────────────────────────────────────────────────
   const buildPayload = (videoUrl, pdfMeta) => ({
     code: form.chapterCode.trim(),
@@ -165,9 +189,8 @@ export default function Chapters() {
     if (!form.subjectName) { setError('Subject Name is required'); return }
     setLoading(true)
     try {
-      let videoUrl, pdfMeta
-      if (form.videoFile) videoUrl = await uploadVideoToBunny(form.videoFile)
-      if (form.pdfFile) pdfMeta = await uploadPdfFile(form.pdfFile)
+      const videoUrl = await resolveVideo()
+      const pdfMeta = await resolvePdf()
       const data = await apiRequest('/admin/chapters', { method: 'POST', body: JSON.stringify(buildPayload(videoUrl, pdfMeta)) })
       setCatalog(prev => ({ ...prev, chapters: [...(prev.chapters || []), data.chapter] }))
       reset()
@@ -184,6 +207,15 @@ export default function Chapters() {
       subjectName: ch.subject || '',
       videoFile: null,
       pdfFile: null,
+      // ch.videoUrl is already a signed, viewable Bunny embed URL.
+      // ch.pdfUrl is an internal storage path (not clickable) — use the
+      // short-lived signed ch.pdfPreviewUrl for viewing instead.
+      existingVideoUrl: ch.videoUrl || null,
+      existingPdfUrl: ch.pdfUrl || null,
+      existingPdfPreviewUrl: ch.pdfPreviewUrl || null,
+      existingPdfFileName: ch.pdfFileName || null,
+      removeVideo: false,
+      removePdf: false,
       assessments: ch.assessments?.length
         ? ch.assessments.map(a => ({ question: a.question, options: a.options || ['', '', '', ''], answer: a.answer || '' }))
         : [],
@@ -198,9 +230,8 @@ export default function Chapters() {
     if (!form.subjectName) { setError('Subject Name is required'); return }
     setLoading(true)
     try {
-      let videoUrl, pdfMeta
-      if (form.videoFile) videoUrl = await uploadVideoToBunny(form.videoFile)
-      if (form.pdfFile) pdfMeta = await uploadPdfFile(form.pdfFile)
+      const videoUrl = await resolveVideo()
+      const pdfMeta = await resolvePdf()
       const data = await apiRequest(`/admin/chapters/${editingId}`, { method: 'PUT', body: JSON.stringify(buildPayload(videoUrl, pdfMeta)) })
       setCatalog(prev => ({ ...prev, chapters: prev.chapters.map(c => c.id === editingId ? data.chapter : c) }))
       reset()
@@ -298,60 +329,124 @@ export default function Chapters() {
           {/* Video */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Chapter Video</label>
-            <div
-              style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '18px 14px', textAlign: 'center', cursor: 'pointer', background: form.videoFile ? 'rgba(108,99,255,0.06)' : 'transparent', transition: 'background 0.2s' }}
-              onClick={() => videoInputRef.current?.click()}
-            >
-              <input ref={videoInputRef} type="file" accept="video/*" style={{ display: 'none' }}
-                onChange={e => { set('videoFile', e.target.files[0] || null); setUploadProgress(p => ({ ...p, video: null })) }} />
-              <FileVideo size={26} color={form.videoFile ? 'var(--accent)' : 'var(--text3)'} style={{ marginBottom: 6 }} />
-              {form.videoFile ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, wordBreak: 'break-all' }}>{form.videoFile.name}</span>
-                  <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 0 }}
-                    onClick={e => { e.stopPropagation(); set('videoFile', null); setUploadProgress(p => ({ ...p, video: null })) }}>
-                    <X size={14} />
-                  </button>
+            {(() => {
+              const hasExisting = !!form.existingVideoUrl && !form.removeVideo && !form.videoFile
+              const isRemoved = form.removeVideo && !form.videoFile
+              return (
+                <div
+                  style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '18px 14px', textAlign: 'center', cursor: hasExisting ? 'default' : 'pointer', background: form.videoFile ? 'rgba(108,99,255,0.06)' : 'transparent', transition: 'background 0.2s' }}
+                  onClick={() => { if (!hasExisting) videoInputRef.current?.click() }}
+                >
+                  <input ref={videoInputRef} type="file" accept="video/*" style={{ display: 'none' }}
+                    onChange={e => { set('videoFile', e.target.files[0] || null); setUploadProgress(p => ({ ...p, video: null })) }} />
+                  <FileVideo size={26} color={form.videoFile || hasExisting ? 'var(--accent)' : 'var(--text3)'} style={{ marginBottom: 6 }} />
+
+                  {form.videoFile ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, wordBreak: 'break-all' }}>{form.videoFile.name}</span>
+                      <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 0 }}
+                        onClick={e => { e.stopPropagation(); set('videoFile', null); setUploadProgress(p => ({ ...p, video: null })) }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : hasExisting ? (
+                    <div onClick={e => e.stopPropagation()}>
+                      <p style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, margin: '0 0 8px' }}>Video already uploaded</p>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <a href={form.existingVideoUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
+                          <Eye size={13} /> View
+                        </a>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => videoInputRef.current?.click()}>
+                          Replace
+                        </button>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => set('removeVideo', true)}>
+                          <Trash2 size={13} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : isRemoved ? (
+                    <div onClick={e => e.stopPropagation()}>
+                      <p style={{ fontSize: 13, color: 'var(--red)', margin: '0 0 8px' }}>Video will be removed on save</p>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => set('removeVideo', false)}>
+                        <RotateCcw size={13} /> Undo
+                      </button>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload video<br /><span style={{ fontSize: 11 }}>MP4, MOV, AVI, etc.</span></p>
+                  )}
+
+                  {uploadProgress.video === 'uploading' ? (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${videoUploadPct}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>{videoUploadMsg}</span>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 4 }}><UploadBadge status={uploadProgress.video} /></div>
+                  )}
                 </div>
-              ) : (
-                <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload video<br /><span style={{ fontSize: 11 }}>MP4, MOV, AVI, etc.</span></p>
-              )}
-              {uploadProgress.video === 'uploading' ? (
-                <div style={{ marginTop: 6 }}>
-                  <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${videoUploadPct}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{videoUploadMsg}</span>
-                </div>
-              ) : (
-                <div style={{ marginTop: 4 }}><UploadBadge status={uploadProgress.video} /></div>
-              )}
-            </div>
+              )
+            })()}
           </div>
 
           {/* PDF */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Chapter PDF / Notes</label>
-            <div
-              style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '18px 14px', textAlign: 'center', cursor: 'pointer', background: form.pdfFile ? 'rgba(0,212,170,0.06)' : 'transparent', transition: 'background 0.2s' }}
-              onClick={() => pdfInputRef.current?.click()}
-            >
-              <input ref={pdfInputRef} type="file" accept=".pdf,.doc,.docx" style={{ display: 'none' }}
-                onChange={e => { set('pdfFile', e.target.files[0] || null); setUploadProgress(p => ({ ...p, pdf: null })) }} />
-              <FileText size={26} color={form.pdfFile ? '#00d4aa' : 'var(--text3)'} style={{ marginBottom: 6 }} />
-              {form.pdfFile ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, wordBreak: 'break-all' }}>{form.pdfFile.name}</span>
-                  <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 0 }}
-                    onClick={e => { e.stopPropagation(); set('pdfFile', null); setUploadProgress(p => ({ ...p, pdf: null })) }}>
-                    <X size={14} />
-                  </button>
+            {(() => {
+              const hasExisting = !!form.existingPdfUrl && !form.removePdf && !form.pdfFile
+              const isRemoved = form.removePdf && !form.pdfFile
+              return (
+                <div
+                  style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '18px 14px', textAlign: 'center', cursor: hasExisting ? 'default' : 'pointer', background: form.pdfFile ? 'rgba(0,212,170,0.06)' : 'transparent', transition: 'background 0.2s' }}
+                  onClick={() => { if (!hasExisting) pdfInputRef.current?.click() }}
+                >
+                  <input ref={pdfInputRef} type="file" accept=".pdf,.doc,.docx" style={{ display: 'none' }}
+                    onChange={e => { set('pdfFile', e.target.files[0] || null); setUploadProgress(p => ({ ...p, pdf: null })) }} />
+                  <FileText size={26} color={form.pdfFile || hasExisting ? '#00d4aa' : 'var(--text3)'} style={{ marginBottom: 6 }} />
+
+                  {form.pdfFile ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, wordBreak: 'break-all' }}>{form.pdfFile.name}</span>
+                      <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 0 }}
+                        onClick={e => { e.stopPropagation(); set('pdfFile', null); setUploadProgress(p => ({ ...p, pdf: null })) }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : hasExisting ? (
+                    <div onClick={e => e.stopPropagation()}>
+                      <p style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, margin: '0 0 8px', wordBreak: 'break-all' }}>
+                        {form.existingPdfFileName || 'PDF already uploaded'}
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {form.existingPdfPreviewUrl && (
+                          <a href={form.existingPdfPreviewUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
+                            <Eye size={13} /> View
+                          </a>
+                        )}
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => pdfInputRef.current?.click()}>
+                          Replace
+                        </button>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => set('removePdf', true)}>
+                          <Trash2 size={13} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : isRemoved ? (
+                    <div onClick={e => e.stopPropagation()}>
+                      <p style={{ fontSize: 13, color: 'var(--red)', margin: '0 0 8px' }}>PDF will be removed on save</p>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => set('removePdf', false)}>
+                        <RotateCcw size={13} /> Undo
+                      </button>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload PDF / Notes<br /><span style={{ fontSize: 11 }}>PDF, DOC, DOCX</span></p>
+                  )}
+
+                  <div style={{ marginTop: 4 }}><UploadBadge status={uploadProgress.pdf} /></div>
                 </div>
-              ) : (
-                <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload PDF / Notes<br /><span style={{ fontSize: 11 }}>PDF, DOC, DOCX</span></p>
-              )}
-              <div style={{ marginTop: 4 }}><UploadBadge status={uploadProgress.pdf} /></div>
-            </div>
+              )
+            })()}
           </div>
         </div>
 
