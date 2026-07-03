@@ -4,6 +4,12 @@ import * as tus from 'tus-js-client'
 import { apiRequest, API_BASE_URL } from '../utils/api'
 import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
 
+// crypto.randomUUID() only exists in secure contexts (HTTPS/localhost) — the
+// admin panel is served over plain HTTP, so it's unavailable here and throws,
+// silently breaking the caller. This just needs to be unique within the
+// current form session, not a real UUID, so a plain fallback is fine.
+const generateId = () => `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
 const emptyForm = {
   chapterCode: '',
   chapterName: '',
@@ -119,7 +125,7 @@ export default function Chapters() {
 
   const handleAddVideos = (fileList) => {
     const files = Array.from(fileList || [])
-    const items = files.map(file => ({ id: crypto.randomUUID(), status: 'uploading', file, title: file.name }))
+    const items = files.map(file => ({ id: generateId(), status: 'uploading', file, title: file.name }))
     if (!items.length) return
     setForm(f => ({ ...f, videos: [...f.videos, ...items] }))
     items.forEach(item => uploadVideoItem(item.file, item.id))
@@ -168,7 +174,7 @@ export default function Chapters() {
 
   const handleAddMaterials = (fileList) => {
     const files = Array.from(fileList || [])
-    const items = files.map(file => ({ id: crypto.randomUUID(), status: 'uploading', fileName: file.name }))
+    const items = files.map(file => ({ id: generateId(), status: 'uploading', fileName: file.name }))
     if (!items.length) return
     setForm(f => ({ ...f, materials: [...f.materials, ...items] }))
     items.forEach((item, idx) => uploadMaterialItem(files[idx], item.id))
