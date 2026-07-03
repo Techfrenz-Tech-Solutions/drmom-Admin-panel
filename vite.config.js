@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: true,
-    port: 5174,
+    port: 5173,
     proxy: {
       '/api': {
         target: 'http://106.51.20.225:28100',
@@ -16,3 +16,4 @@ export default defineConfig({
     },
   },
 });
+

@@ -1,9 +1,29 @@
 import { useEffect, useState } from 'react'
-import { DollarSign, BookOpen, Layers, Video, GraduationCap, BookMarked, Edit2, Trash2 } from 'lucide-react'
+import {
+  DollarSign, BookOpen, Layers, Video, GraduationCap,
+  BookMarked, Edit2, Trash2, Tag, ChevronDown, ChevronUp,
+} from 'lucide-react'
 import { apiRequest } from '../utils/api'
-import { classNames, flattenLessons, loadAdminCatalog, paiseToRupees, rupeesToPaise, subjectNames } from '../utils/adminData'
+import {
+  classNames, flattenLessons, loadAdminCatalog,
+  paiseToRupees, rupeesToPaise, subjectNames,
+} from '../utils/adminData'
 
-const EMPTY = { className: '', subjectName: '', courseId: '', chapterName: '', lessonId: '', amount: '' }
+// ─── Sell Individual sub-form state ────────────────────────────────────────
+const emptyIndividual = {
+  type: '',          // 'class' | 'subject' | 'course' | 'chapter'
+  className: '',
+  subjectName: '',
+  courseId: '',
+  chapterId: '',
+  amount: '',
+}
+
+// ─── Main form state ────────────────────────────────────────────────────────
+const EMPTY = {
+  className: '', subjectName: '', courseId: '',
+  chapterName: '', lessonId: '', amount: '',
+}
 
 export default function Prices() {
   const [catalog, setCatalog] = useState({ classes: [], subjects: [], chapters: [], courses: [] })
@@ -12,14 +32,25 @@ export default function Prices() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Sell Individual state
+  const [sellOpen, setSellOpen] = useState(false)          // whole section open/closed
+  const [indiv, setIndiv] = useState(emptyIndividual)
+  const [indivError, setIndivError] = useState('')
+  const [indivLoading, setIndivLoading] = useState(false)
+
   const load = async () => setCatalog(await loadAdminCatalog())
-  useEffect(() => { load().catch((error) => setError(error.message)) }, [])
+  useEffect(() => { load().catch((e) => setError(e.message)) }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const reset = () => { setForm(EMPTY); setEditing(null); setError('') }
 
+  const setInd = (k, v) => setIndiv(f => ({ ...f, [k]: v }))
+  const resetIndiv = () => { setIndiv(emptyIndividual); setIndivError('') }
+
+  // ─── Catalog helpers ────────────────────────────────────────────────────
   const courses = catalog.courses || []
   const lessons = flattenLessons(courses)
+
   const filteredCourses = courses.filter(c =>
     (!form.className || c.classLabel === form.className) &&
     (!form.subjectName || c.subject === form.subjectName)
@@ -29,11 +60,19 @@ export default function Prices() {
     (!form.subjectName || c.subject === form.subjectName) &&
     (!form.courseId || c.courseId === form.courseId)
   )
-  const filteredLessons = lessons.filter(v =>
-    (!form.courseId || v.courseId === form.courseId) &&
-    (!form.chapterName || v.chapterTitle === form.chapterName)
+
+  // Filtered catalogs for individual sub-form
+  const indivCourses = courses.filter(c =>
+    (!indiv.className || c.classLabel === indiv.className) &&
+    (!indiv.subjectName || c.subject === indiv.subjectName)
+  )
+  const indivChapters = (catalog.chapters || []).filter(c =>
+    (!indiv.className || c.classLabel === indiv.className) &&
+    (!indiv.subjectName || c.subject === indiv.subjectName) &&
+    (!indiv.courseId || c.courseId === indiv.courseId)
   )
 
+  // ─── Main form submit ───────────────────────────────────────────────────
   const validate = () => {
     if (!form.courseId) return 'Course Name is required'
     if (!form.amount || isNaN(form.amount) || Number(form.amount) < 0) return 'Valid pricing amount is required'
@@ -53,58 +92,105 @@ export default function Prices() {
       }
       await load()
       reset()
-    } catch (error) {
-      setError(error.message)
+    } catch (e) {
+      setError(e.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleEditCourse = (course) => {
-    setEditing({ type: 'course', id: course.id })
-    setForm({
-      className: course.classLabel || '',
-      subjectName: course.subject || '',
-      courseId: course.id,
-      chapterName: '',
-      lessonId: '',
-      amount: String(paiseToRupees(course.priceInPaise)),
-    })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  // ─── Sell Individual submit ─────────────────────────────────────────────
+  const handleIndivSubmit = async () => {
+    if (!indiv.type) { setIndivError('Select a type first'); return }
+    if (!indiv.amount || isNaN(indiv.amount) || Number(indiv.amount) < 0) { setIndivError('Valid amount is required'); return }
 
-  const handleDelete = async (p) => {
-    if (!window.confirm(`Reset price for "${p.title}" to ₹0?`)) return
+    if (indiv.type === 'class' && !indiv.className) { setIndivError('Select a class'); return }
+    if (indiv.type === 'subject' && !indiv.subjectName) { setIndivError('Select a subject'); return }
+    if (indiv.type === 'course' && !indiv.courseId) { setIndivError('Select a course'); return }
+    if (indiv.type === 'chapter' && !indiv.chapterId) { setIndivError('Select a chapter'); return }
+
+    setIndivLoading(true)
     try {
-      if (p.lesson) {
-        await apiRequest(`/admin/lessons/${p.lesson.id}/price`, { method: 'PATCH', body: JSON.stringify({ priceInPaise: 0 }) })
-      } else {
-        await apiRequest(`/admin/courses/${p.course.id}/price`, { method: 'PATCH', body: JSON.stringify({ priceInPaise: 0 }) })
+      const priceInPaise = rupeesToPaise(indiv.amount)
+      const body = JSON.stringify({ priceInPaise })
+
+      if (indiv.type === 'course') {
+        await apiRequest(`/admin/courses/${indiv.courseId}/price`, { method: 'PATCH', body })
+      } else if (indiv.type === 'chapter') {
+        await apiRequest(`/admin/chapters/${indiv.chapterId}/price`, { method: 'PATCH', body })
+      } else if (indiv.type === 'class') {
+        await apiRequest(`/admin/classes/price`, { method: 'PATCH', body: JSON.stringify({ className: indiv.className, priceInPaise }) })
+      } else if (indiv.type === 'subject') {
+        await apiRequest(`/admin/subjects/price`, { method: 'PATCH', body: JSON.stringify({ subjectName: indiv.subjectName, priceInPaise }) })
       }
       await load()
-      if (editing?.id === (p.lesson?.id || p.course?.id)) reset()
-    } catch (error) {
-      setError(error.message)
+      resetIndiv()
+    } catch (e) {
+      setIndivError(e.message)
+    } finally {
+      setIndivLoading(false)
     }
+  }
+
+  // ─── Edit / Delete ──────────────────────────────────────────────────────
+  const handleEditCourse = (course) => {
+    setEditing({ type: 'course', id: course.id })
+    setForm({ className: course.classLabel || '', subjectName: course.subject || '', courseId: course.id, chapterName: '', lessonId: '', amount: String(paiseToRupees(course.priceInPaise)) })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleEditLesson = (lesson) => {
     setEditing({ type: 'lesson', id: lesson.id })
-    setForm({
-      className: lesson.classLabel || '',
-      subjectName: lesson.subject || '',
-      courseId: lesson.courseId,
-      chapterName: lesson.chapterTitle || '',
-      lessonId: lesson.id,
-      amount: String(paiseToRupees(lesson.priceInPaise || lesson.course.priceInPaise)),
-    })
+    setForm({ className: lesson.classLabel || '', subjectName: lesson.subject || '', courseId: lesson.courseId, chapterName: lesson.chapterTitle || '', lessonId: lesson.id, amount: String(paiseToRupees(lesson.priceInPaise || lesson.course.priceInPaise)) })
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleDelete = async (p) => {
+    if (!window.confirm(`Delete price for "${p.title}"?`)) return
+    try {
+      if (p.lesson) {
+        await apiRequest(`/admin/lessons/${p.lesson.id}/price`, { method: 'DELETE' })
+      } else {
+        await apiRequest(`/admin/courses/${p.course.id}/price`, { method: 'DELETE' })
+      }
+      await load()
+      if (editing?.id === (p.lesson?.id || p.course?.id)) reset()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const priceCards = [
     ...courses.map(course => ({ id: `course-${course.id}`, type: 'Course', course, amount: paiseToRupees(course.priceInPaise), title: course.title, className: course.classLabel, subjectName: course.subject, chapterName: '-', lessonName: '-' })),
     ...lessons.map(lesson => ({ id: `lesson-${lesson.id}`, type: 'Lesson', lesson, amount: paiseToRupees(lesson.priceInPaise || lesson.course.priceInPaise), title: lesson.title, className: lesson.classLabel, subjectName: lesson.subject, courseName: lesson.courseTitle, chapterName: lesson.chapterTitle || '-', lessonName: lesson.title })),
   ]
+
+  // ─── Checkbox pill style ────────────────────────────────────────────────
+  const TypeCheckbox = ({ value, label, icon: Icon }) => {
+    const active = indiv.type === value
+    return (
+      <label style={{
+        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+        padding: '8px 16px', borderRadius: 24,
+        border: `2px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+        background: active ? 'rgba(94,61,143,0.1)' : 'transparent',
+        fontWeight: 600, fontSize: 13, color: active ? 'var(--accent)' : 'var(--text2)',
+        transition: 'all 0.18s', userSelect: 'none',
+      }}>
+        <input
+          type="checkbox"
+          checked={active}
+          style={{ display: 'none' }}
+          onChange={() => {
+            setIndiv({ ...emptyIndividual, type: active ? '' : value })
+            setIndivError('')
+          }}
+        />
+        <Icon size={14} />
+        {label}
+      </label>
+    )
+  }
 
   return (
     <div>
@@ -115,7 +201,178 @@ export default function Prices() {
         </div>
       </div>
 
+      {/* ── Sell Individual Section ────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom: 20 }}>
+
+        {/* Toggle header */}
+        <button
+          type="button"
+          style={{
+            width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: 0,
+          }}
+          onClick={() => { setSellOpen(o => !o); resetIndiv() }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(94,61,143,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Tag size={16} color="var(--accent)" />
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Sell Individual</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Set a price for a specific class, subject, course or chapter</div>
+            </div>
+          </div>
+          {sellOpen
+            ? <ChevronUp size={18} color="var(--text3)" />
+            : <ChevronDown size={18} color="var(--text3)" />}
+        </button>
+
+        {/* Collapsible body */}
+        {sellOpen && (
+          <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 18 }}>
+
+            {/* Four type checkboxes */}
+            <div style={{ marginBottom: 18 }}>
+              <label className="form-label" style={{ marginBottom: 10 }}>Select Type</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <TypeCheckbox value="class"   label="Class"   icon={GraduationCap} />
+                <TypeCheckbox value="subject" label="Subject" icon={BookMarked} />
+                <TypeCheckbox value="course"  label="Course"  icon={BookOpen} />
+                <TypeCheckbox value="chapter" label="Chapter" icon={Layers} />
+              </div>
+            </div>
+
+            {/* ── Class selected ── */}
+            {indiv.type === 'class' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Class</label>
+                  <select className="input" value={indiv.className} onChange={e => { setInd('className', e.target.value); setIndivError('') }}>
+                    <option value="">— Select Class —</option>
+                    {classNames(catalog).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Price (₹)</label>
+                  <input className="input" type="number" min="0" placeholder="e.g. 499" value={indiv.amount} onChange={e => { setInd('amount', e.target.value); setIndivError('') }} />
+                </div>
+              </div>
+            )}
+
+            {/* ── Subject selected ── */}
+            {indiv.type === 'subject' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Subject</label>
+                  <select className="input" value={indiv.subjectName} onChange={e => { setInd('subjectName', e.target.value); setIndivError('') }}>
+                    <option value="">— Select Subject —</option>
+                    {subjectNames(catalog).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Price (₹)</label>
+                  <input className="input" type="number" min="0" placeholder="e.g. 299" value={indiv.amount} onChange={e => { setInd('amount', e.target.value); setIndivError('') }} />
+                </div>
+              </div>
+            )}
+
+            {/* ── Course selected ── */}
+            {indiv.type === 'course' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Class <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional filter)</span></label>
+                    <select className="input" value={indiv.className} onChange={e => { setInd('className', e.target.value); setInd('courseId', ''); setIndivError('') }}>
+                      <option value="">— All Classes —</option>
+                      {classNames(catalog).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Subject <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional filter)</span></label>
+                    <select className="input" value={indiv.subjectName} onChange={e => { setInd('subjectName', e.target.value); setInd('courseId', ''); setIndivError('') }}>
+                      <option value="">— All Subjects —</option>
+                      {subjectNames(catalog).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Course</label>
+                    <select className="input" value={indiv.courseId} onChange={e => { setInd('courseId', e.target.value); setIndivError('') }}>
+                      <option value="">— Select Course —</option>
+                      {indivCourses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Price (₹)</label>
+                    <input className="input" type="number" min="0" placeholder="e.g. 799" value={indiv.amount} onChange={e => { setInd('amount', e.target.value); setIndivError('') }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Chapter selected ── */}
+            {indiv.type === 'chapter' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Class <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional filter)</span></label>
+                    <select className="input" value={indiv.className} onChange={e => { setInd('className', e.target.value); setInd('courseId', ''); setInd('chapterId', ''); setIndivError('') }}>
+                      <option value="">— All Classes —</option>
+                      {classNames(catalog).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Subject <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional filter)</span></label>
+                    <select className="input" value={indiv.subjectName} onChange={e => { setInd('subjectName', e.target.value); setInd('courseId', ''); setInd('chapterId', ''); setIndivError('') }}>
+                      <option value="">— All Subjects —</option>
+                      {subjectNames(catalog).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Chapter</label>
+                    <select className="input" value={indiv.chapterId} onChange={e => { setInd('chapterId', e.target.value); setIndivError('') }}>
+                      <option value="">— Select Chapter —</option>
+                      {indivChapters.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Price (₹)</label>
+                    <input className="input" type="number" min="0" placeholder="e.g. 149" value={indiv.amount} onChange={e => { setInd('amount', e.target.value); setIndivError('') }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Submit / Cancel for individual */}
+            {indiv.type && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button className="btn btn-primary" onClick={handleIndivSubmit} disabled={indivLoading}>
+                  {indivLoading ? 'Saving…' : 'Submit'}
+                </button>
+                <button className="btn btn-ghost" onClick={resetIndiv}>Cancel</button>
+                {indivError && <span style={{ color: 'var(--red)', fontSize: 13 }}>{indivError}</span>}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Main Pricing Form ─────────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(94,61,143,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <DollarSign size={16} color="var(--accent)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Set Course Price</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Assign a price to a full course or lesson</div>
+          </div>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class Name</label>
@@ -152,13 +409,6 @@ export default function Prices() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Lesson Name</label>
-            <select className="input" value={form.lessonId} onChange={e => { set('lessonId', e.target.value); setError('') }}>
-              <option value="">— Whole Course Price —</option>
-              {filteredLessons.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Pricing Amount (₹)</label>
             <input className="input" type="number" min="0" placeholder="e.g. 299" value={form.amount} onChange={e => { set('amount', e.target.value); setError('') }} onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
           </div>
@@ -171,8 +421,11 @@ export default function Prices() {
         </div>
       </div>
 
+      {/* ── Price Cards ──────────────────────────────────────────────────── */}
       {priceCards.length === 0 ? (
-        <div className="card"><div className="empty-state"><DollarSign size={36} /><p>No pricing records yet. Create a course first.</p></div></div>
+        <div className="card">
+          <div className="empty-state"><DollarSign size={36} /><p>No pricing records yet. Create a course first.</p></div>
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
           {priceCards.map(p => (
@@ -183,21 +436,28 @@ export default function Prices() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { icon: GraduationCap, label: 'Class', value: p.className || '-' },
-                  { icon: BookMarked, label: 'Subject', value: p.subjectName || '-' },
-                  { icon: BookOpen, label: 'Course', value: p.course?.title || p.courseName || p.title },
-                  { icon: Layers, label: 'Chapter', value: p.chapterName },
-                  { icon: Video, label: 'Lesson', value: p.lessonName },
+                  { icon: GraduationCap, label: 'Class',   value: p.className || '-' },
+                  { icon: BookMarked,   label: 'Subject', value: p.subjectName || '-' },
+                  { icon: BookOpen,     label: 'Course',  value: p.course?.title || p.courseName || p.title },
+                  { icon: Layers,       label: 'Chapter', value: p.chapterName },
+                  { icon: Video,        label: 'Lesson',  value: p.lessonName },
                 ].map(({ icon: Icon, label, value }) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Icon size={14} color="var(--text3)" style={{ flexShrink: 0 }} />
-                    <div><div style={{ fontSize: 11, color: 'var(--text3)' }}>{label}</div><div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{value}</div></div>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{value}</div>
+                    </div>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => p.lesson ? handleEditLesson(p.lesson) : handleEditCourse(p.course)} title="Edit this price"><Edit2 size={13} /> Edit</button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p)} title="Reset price to ₹0"><Trash2 size={13} /> Reset</button>
+                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => p.lesson ? handleEditLesson(p.lesson) : handleEditCourse(p.course)}>
+                  <Edit2 size={13} /> Edit
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p)}>
+                  <Trash2 size={13} /> Delete
+                </button>
               </div>
             </div>
           ))}
