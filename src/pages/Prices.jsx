@@ -453,7 +453,7 @@ export default function Prices() {
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                 <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => p.lesson ? handleEditLesson(p.lesson) : handleEditCourse(p.course)}>
-                  <Edit2 size={13} /> Edits
+                  <Edit2 size={13} /> Edit
                 </button>
                 <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p)}>
                   <Trash2 size={13} /> Delete
