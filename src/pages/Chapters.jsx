@@ -54,19 +54,22 @@ export default function Chapters() {
     }))
 
   // ─── File upload ──────────────────────────────────────────────────────────
-  // PDFs/notes go through the generic backend upload endpoint.
-  const uploadFile = async (file, type) => {
+  // PDFs/notes go to Bunny Storage via the backend (never a public URL back —
+  // just an internal storage reference + metadata; access is gated per-student
+  // by purchase/enrollment at read time).
+  const uploadPdfFile = async (file) => {
     const fd = new FormData()
     fd.append('file', file)
-    setUploadProgress(p => ({ ...p, [type]: 'uploading' }))
+    if (editingId) fd.append('chapterId', editingId)
+    setUploadProgress(p => ({ ...p, pdf: 'uploading' }))
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/upload`, { method: 'POST', credentials: 'include', body: fd })
+      const res = await fetch(`${API_BASE_URL}/admin/uploads/chapter-file`, { method: 'POST', credentials: 'include', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Upload failed')
-      setUploadProgress(p => ({ ...p, [type]: 'done' }))
-      return data.url || data.fileUrl || data.path || null
+      setUploadProgress(p => ({ ...p, pdf: 'done' }))
+      return { storagePath: data.storagePath, fileName: file.name, mimeType: data.mimeType, size: data.size }
     } catch (err) {
-      setUploadProgress(p => ({ ...p, [type]: 'error' }))
+      setUploadProgress(p => ({ ...p, pdf: 'error' }))
       throw err
     }
   }
@@ -133,7 +136,7 @@ export default function Chapters() {
   }
 
   // ─── Payload ──────────────────────────────────────────────────────────────
-  const buildPayload = (videoUrl, pdfUrl) => ({
+  const buildPayload = (videoUrl, pdfMeta) => ({
     code: form.chapterCode.trim(),
     title: form.chapterName.trim(),
     classLabel: form.className,
@@ -143,7 +146,12 @@ export default function Chapters() {
       ? catalog.chapters.findIndex((item) => item.id === editingId) + 1
       : (catalog.chapters || []).length + 1,
     ...(videoUrl !== undefined && { videoUrl }),
-    ...(pdfUrl !== undefined && { pdfUrl }),
+    ...(pdfMeta !== undefined && {
+      pdfUrl: pdfMeta.storagePath,
+      pdfFileName: pdfMeta.fileName,
+      pdfMimeType: pdfMeta.mimeType,
+      pdfSize: pdfMeta.size,
+    }),
     assessments: form.assessments
       .filter(a => a.question.trim())
       .map(a => ({ question: a.question.trim(), options: a.options, answer: a.answer })),
@@ -157,10 +165,10 @@ export default function Chapters() {
     if (!form.subjectName) { setError('Subject Name is required'); return }
     setLoading(true)
     try {
-      let videoUrl, pdfUrl
+      let videoUrl, pdfMeta
       if (form.videoFile) videoUrl = await uploadVideoToBunny(form.videoFile)
-      if (form.pdfFile) pdfUrl = await uploadFile(form.pdfFile, 'pdf')
-      const data = await apiRequest('/admin/chapters', { method: 'POST', body: JSON.stringify(buildPayload(videoUrl, pdfUrl)) })
+      if (form.pdfFile) pdfMeta = await uploadPdfFile(form.pdfFile)
+      const data = await apiRequest('/admin/chapters', { method: 'POST', body: JSON.stringify(buildPayload(videoUrl, pdfMeta)) })
       setCatalog(prev => ({ ...prev, chapters: [...(prev.chapters || []), data.chapter] }))
       reset()
     } catch (e) { setError(e.message) } finally { setLoading(false) }
@@ -190,10 +198,10 @@ export default function Chapters() {
     if (!form.subjectName) { setError('Subject Name is required'); return }
     setLoading(true)
     try {
-      let videoUrl, pdfUrl
+      let videoUrl, pdfMeta
       if (form.videoFile) videoUrl = await uploadVideoToBunny(form.videoFile)
-      if (form.pdfFile) pdfUrl = await uploadFile(form.pdfFile, 'pdf')
-      const data = await apiRequest(`/admin/chapters/${editingId}`, { method: 'PUT', body: JSON.stringify(buildPayload(videoUrl, pdfUrl)) })
+      if (form.pdfFile) pdfMeta = await uploadPdfFile(form.pdfFile)
+      const data = await apiRequest(`/admin/chapters/${editingId}`, { method: 'PUT', body: JSON.stringify(buildPayload(videoUrl, pdfMeta)) })
       setCatalog(prev => ({ ...prev, chapters: prev.chapters.map(c => c.id === editingId ? data.chapter : c) }))
       reset()
     } catch (e) { setError(e.message) } finally { setLoading(false) }
