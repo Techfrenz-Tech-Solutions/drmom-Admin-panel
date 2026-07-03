@@ -206,7 +206,7 @@ export default function Chapters() {
       : (catalog.chapters || []).length + 1,
     videos: form.videos
       .filter(v => v.status === 'done' || v.status === 'existing')
-      .map(v => ({ id: v.id, embedUrl: v.embedUrl, bunnyVideoId: v.bunnyVideoId, title: v.title })),
+      .map(v => ({ id: v.id, embedUrl: v.embedUrl, bunnyVideoId: v.bunnyVideoId, title: v.title, isPreview: !!v.isPreview })),
     materials: form.materials
       .filter(m => m.status === 'done' || m.status === 'existing')
       .map(m => ({ id: m.id, storagePath: m.storagePath, fileName: m.fileName, mimeType: m.mimeType, size: m.size })),
@@ -373,6 +373,12 @@ export default function Chapters() {
                         <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden', marginTop: 6 }}>
                           <div style={{ height: '100%', width: `${v.pct || 0}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
                         </div>
+                      )}
+                      {(v.status === 'done' || v.status === 'existing') && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'var(--text3)', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={!!v.isPreview} onChange={e => updateVideoItem(v.id, { isPreview: e.target.checked })} />
+                          Free preview (watchable without purchase)
+                        </label>
                       )}
                       {form.playingVideoId === v.id && v.embedUrl && (
                         <div style={{ marginTop: 8, borderRadius: 6, overflow: 'hidden', background: '#000' }}>

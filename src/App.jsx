@@ -12,7 +12,6 @@ import Videos from './pages/Lesson'
 import Prices from './pages/Prices'
 import Users from './pages/Users'
 import Courses from './pages/Courses'
-import ProductMaster from './pages/ProductMaster'
 import Orders from './pages/Orders'
 import Enrollments from './pages/Enrollments'
 
@@ -23,7 +22,6 @@ const PAGE_TITLES = {
   '/courses': 'Courses',
   '/chapters': 'Chapters',
   '/videos': 'Lesson Master',
-  '/products': 'Product Master',
   '/prices': 'Pricing',
   '/users': 'Users',
   '/orders': 'Orders',
@@ -65,7 +63,6 @@ function Layout() {
             <Route path="/courses" element={<Courses />} />
             <Route path="/chapters" element={<Chapters />} />
             <Route path="/videos" element={<Videos />} />
-            <Route path="/products" element={<ProductMaster />} />
             <Route path="/prices" element={<Prices />} />
             <Route path="/users" element={<Users />} />
             <Route path="/orders" element={<Orders />} />

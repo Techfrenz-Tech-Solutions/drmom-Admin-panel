@@ -91,7 +91,7 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BookOpen, Video, Layers, BookMarked,
-  DollarSign, Users, ChevronRight, GraduationCap, Package,
+  DollarSign, Users, ChevronRight, GraduationCap,
   ShoppingCart, UserCheck,
 } from 'lucide-react'
 import './Sidebar.css'
@@ -104,8 +104,7 @@ const nav = [
   { to: '/classes', icon: GraduationCap, label: 'Classes' },
   { to: '/subjects', icon: BookMarked, label: 'Subjects' },
   { to: '/chapters', icon: Layers, label: 'Chapters' },
-  // { to: '/videos', icon: Video, label: 'Lesson Master' },
-  { to: '/products', icon: Package, label: 'Product Master' },
+  // { to: '/videos', icon: Video, label: 'Lesson Master' } — legacy, superseded by Chapters (Class > Subject > Course > Chapter)
   { to: '/prices', icon: DollarSign, label: 'Pricing' },
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders' },
