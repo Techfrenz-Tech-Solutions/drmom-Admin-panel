@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, ClipboardList, X, CheckCircle } from 'lucide-react'
+import * as tus from 'tus-js-client'
 import { apiRequest, API_BASE_URL } from '../utils/api'
 import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
 
@@ -21,6 +22,8 @@ export default function Chapters() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState({ video: null, pdf: null })
+  const [videoUploadPct, setVideoUploadPct] = useState(0)
+  const [videoUploadMsg, setVideoUploadMsg] = useState('')
 
   const videoInputRef = useRef(null)
   const pdfInputRef = useRef(null)
@@ -29,7 +32,7 @@ export default function Chapters() {
   useEffect(() => { load().catch((e) => setError(e.message)) }, [])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const reset = () => { setForm(emptyForm); setEditingId(null); setError(''); setUploadProgress({ video: null, pdf: null }) }
+  const reset = () => { setForm(emptyForm); setEditingId(null); setError(''); setUploadProgress({ video: null, pdf: null }); setVideoUploadPct(0); setVideoUploadMsg('') }
 
   // ─── Assessment helpers ───────────────────────────────────────────────────
   const addAssessment = () =>
@@ -51,6 +54,7 @@ export default function Chapters() {
     }))
 
   // ─── File upload ──────────────────────────────────────────────────────────
+  // PDFs/notes go through the generic backend upload endpoint.
   const uploadFile = async (file, type) => {
     const fd = new FormData()
     fd.append('file', file)
@@ -63,6 +67,67 @@ export default function Chapters() {
       return data.url || data.fileUrl || data.path || null
     } catch (err) {
       setUploadProgress(p => ({ ...p, [type]: 'error' }))
+      throw err
+    }
+  }
+
+  // Videos go straight to Bunny Stream via TUS — the file never touches our
+  // server, mirroring the flow on the Videos/Lesson page.
+  const uploadVideoToBunny = async (file) => {
+    setUploadProgress(p => ({ ...p, video: 'uploading' }))
+    setVideoUploadPct(0)
+    setVideoUploadMsg('Initialising upload…')
+    try {
+      const creds = await apiRequest('/admin/bunny/videos/init', {
+        method: 'POST',
+        body: JSON.stringify({ title: form.chapterName.trim() || file.name }),
+      })
+
+      await new Promise((resolve, reject) => {
+        const upload = new tus.Upload(file, {
+          endpoint: creds.tusEndpoint,
+          retryDelays: [0, 3000, 5000, 10000],
+          headers: {
+            AuthorizationSignature: creds.authSignature,
+            AuthorizationExpire: String(creds.authExpire),
+            VideoId: creds.videoGuid,
+            LibraryId: String(creds.libraryId),
+          },
+          metadata: { filetype: file.type, title: form.chapterName.trim() || file.name },
+          onProgress: (uploaded, total) => {
+            setVideoUploadPct(Math.round((uploaded / total) * 90))
+            setVideoUploadMsg(`Uploading… ${Math.round((uploaded / total) * 100)}%`)
+          },
+          onSuccess: () => resolve(),
+          onError: (err) => reject(err),
+        })
+        upload.start()
+      })
+
+      setVideoUploadPct(95)
+      setVideoUploadMsg('Upload done — Bunny is encoding…')
+
+      for (let i = 0; i < 36; i++) {
+        await new Promise(r => setTimeout(r, 5000))
+        try {
+          const s = await apiRequest(`/admin/bunny/videos/${creds.videoGuid}/status`)
+          if (s.ready) { setVideoUploadPct(100); setVideoUploadMsg('Video ready ✓'); break }
+          if (s.status === 5 || s.status === 6) throw new Error(s.statusLabel)
+          setVideoUploadMsg(`Encoding… (${s.statusLabel})`)
+        } catch (pollErr) {
+          if (pollErr.message !== 'Request failed') throw pollErr
+        }
+      }
+      if (videoUploadPct < 100) {
+        setVideoUploadPct(100)
+        setVideoUploadMsg('Uploaded — encoding in background')
+      }
+
+      setUploadProgress(p => ({ ...p, video: 'done' }))
+      return creds.embedUrl
+    } catch (err) {
+      setUploadProgress(p => ({ ...p, video: 'error' }))
+      setVideoUploadMsg(err.message || 'Upload failed')
       throw err
     }
   }
@@ -93,7 +158,7 @@ export default function Chapters() {
     setLoading(true)
     try {
       let videoUrl, pdfUrl
-      if (form.videoFile) videoUrl = await uploadFile(form.videoFile, 'video')
+      if (form.videoFile) videoUrl = await uploadVideoToBunny(form.videoFile)
       if (form.pdfFile) pdfUrl = await uploadFile(form.pdfFile, 'pdf')
       const data = await apiRequest('/admin/chapters', { method: 'POST', body: JSON.stringify(buildPayload(videoUrl, pdfUrl)) })
       setCatalog(prev => ({ ...prev, chapters: [...(prev.chapters || []), data.chapter] }))
@@ -116,7 +181,7 @@ export default function Chapters() {
         : [],
     })
     setError('')
-    setUploadProgress({ video: null, pdf: null })
+    setUploadProgress({ video: null, pdf: null }); setVideoUploadPct(0); setVideoUploadMsg('')
   }
 
   const handleUpdate = async () => {
@@ -126,7 +191,7 @@ export default function Chapters() {
     setLoading(true)
     try {
       let videoUrl, pdfUrl
-      if (form.videoFile) videoUrl = await uploadFile(form.videoFile, 'video')
+      if (form.videoFile) videoUrl = await uploadVideoToBunny(form.videoFile)
       if (form.pdfFile) pdfUrl = await uploadFile(form.pdfFile, 'pdf')
       const data = await apiRequest(`/admin/chapters/${editingId}`, { method: 'PUT', body: JSON.stringify(buildPayload(videoUrl, pdfUrl)) })
       setCatalog(prev => ({ ...prev, chapters: prev.chapters.map(c => c.id === editingId ? data.chapter : c) }))
@@ -243,7 +308,16 @@ export default function Chapters() {
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload video<br /><span style={{ fontSize: 11 }}>MP4, MOV, AVI, etc.</span></p>
               )}
-              <div style={{ marginTop: 4 }}><UploadBadge status={uploadProgress.video} /></div>
+              {uploadProgress.video === 'uploading' ? (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${videoUploadPct}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{videoUploadMsg}</span>
+                </div>
+              ) : (
+                <div style={{ marginTop: 4 }}><UploadBadge status={uploadProgress.video} /></div>
+              )}
             </div>
           </div>
 
