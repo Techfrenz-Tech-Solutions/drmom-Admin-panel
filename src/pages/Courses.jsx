@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit2, Trash2, BookOpen, Eye, EyeOff } from 'lucide-react'
 import { apiRequest } from '../utils/api'
-import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
+import { classNames, loadAdminCatalog, paiseToRupees, rupeesToPaise, subjectNames } from '../utils/adminData'
 
 const INIT_COURSES = [
   { id: 1, code: 'CRS-001', title: 'LKG Complete Course', subject: 'All Subjects', class: 'LKG' },
@@ -9,7 +9,7 @@ const INIT_COURSES = [
   { id: 3, code: 'CRS-003', title: '1st Grade Science',   subject: 'Science',      class: '1st' },
 ]
 
-const EMPTY = { courseCode: '', courseName: '', subjectName: '', className: '' }
+const EMPTY = { courseCode: '', courseName: '', subjectName: '', className: '', priceInRupees: '' }
 
 const classToId = (name) => {
   const normalized = String(name || '').toLowerCase().replace(/\s+/g, '')
@@ -27,6 +27,7 @@ const toCourseRow = (course, index = 0) => ({
   title: course.title,
   subject: course.subject || 'General',
   class: course.classLabel || course.classId || '',
+  price: paiseToRupees(course.priceInPaise),
   raw: course,
 })
 
@@ -58,7 +59,7 @@ export default function Courses() {
     description: `${form.courseName.trim()} for ${form.className || 'students'}.`,
     shortDescription: `${form.subjectName || 'General'} course`,
     thumbnailUrl: '',
-    priceInPaise: 49900,
+    priceInPaise: rupeesToPaise(form.priceInRupees),
     status: 'PUBLISHED',
     classId: classToId(form.className),
     classLabel: form.className,
@@ -71,11 +72,14 @@ export default function Courses() {
   })
 
   const handleCreate = async () => {
-    const { courseCode, courseName, subjectName, className } = form
+    const { courseCode, courseName, subjectName, className, priceInRupees } = form
     if (!courseCode.trim()) { setError('Course Code is required');  return }
     if (!courseName.trim()) { setError('Course Name is required');  return }
     if (!subjectName)       { setError('Subject Name is required'); return }
     if (!className)         { setError('Class Name is required');   return }
+    if (priceInRupees === '' || Number.isNaN(Number(priceInRupees)) || Number(priceInRupees) < 0) {
+      setError('Enter a valid course price'); return
+    }
 
     setLoading(true)
     try {
@@ -95,16 +99,25 @@ export default function Courses() {
   /* ---------- Load row for edit ---------- */
   const handleEditClick = (c) => {
     setEditingId(c.id)
-    setForm({ courseCode: c.code, courseName: c.title, subjectName: c.subject, className: c.class })
+    setForm({
+      courseCode: c.code,
+      courseName: c.title,
+      subjectName: c.subject,
+      className: c.class,
+      priceInRupees: String(paiseToRupees(c.raw?.priceInPaise)),
+    })
     setError('')
   }
 
   /* ---------- Update ---------- */
   const handleUpdate = async () => {
-    const { courseCode, courseName, subjectName, className } = form
+    const { courseName, subjectName, className, priceInRupees } = form
     if (!courseName.trim()) { setError('Course Name is required');  return }
     if (!subjectName)       { setError('Subject Name is required'); return }
     if (!className)         { setError('Class Name is required');   return }
+    if (priceInRupees === '' || Number.isNaN(Number(priceInRupees)) || Number(priceInRupees) < 0) {
+      setError('Enter a valid course price'); return
+    }
 
     setLoading(true)
     try {
@@ -212,6 +225,22 @@ export default function Courses() {
           </div>
         </div>
 
+        {/* Row 3 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          {/* Course Price */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Course Price (₹)</label>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              placeholder="e.g. 499"
+              value={form.priceInRupees}
+              onChange={e => { set('priceInRupees', e.target.value); setError('') }}
+            />
+          </div>
+        </div>
+
         {/* Buttons + Error */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {editingId === null ? (
@@ -253,6 +282,7 @@ export default function Courses() {
                   <th>Course Name</th>
                   <th>Subject Name</th>
                   <th>Class Name</th>
+                  <th>Price</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'center' }}>Action</th>
                 </tr>
@@ -283,6 +313,8 @@ export default function Courses() {
                     <td>
                       <span className="badge badge-blue">{c.class}</span>
                     </td>
+
+                    <td style={{ color: 'var(--text)', fontWeight: 600, fontSize: 13 }}>₹{c.price}</td>
 
                     <td>
                       <span className={`badge ${c.raw?.status === 'PUBLISHED' ? 'badge-green' : 'badge-yellow'}`}>
