@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, ClipboardList, Eye, Play } from 'lucide-react'
+import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, Eye, Play } from 'lucide-react'
 import * as tus from 'tus-js-client'
 import { apiRequest, API_BASE_URL } from '../utils/api'
 import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
@@ -42,24 +42,21 @@ export default function Chapters() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const reset = () => { setForm(emptyForm); setEditingId(null); setError('') }
 
-  // ─── Assessment helpers ───────────────────────────────────────────────────
-  const addAssessment = () =>
-    setForm(f => ({ ...f, assessments: [...f.assessments, { question: '', options: ['', '', '', ''], answer: '' }] }))
-
-  const removeAssessment = (idx) =>
-    setForm(f => ({ ...f, assessments: f.assessments.filter((_, i) => i !== idx) }))
-
-  const setAssessmentField = (idx, field, value) =>
-    setForm(f => ({ ...f, assessments: f.assessments.map((a, i) => i === idx ? { ...a, [field]: value } : a) }))
-
-  const setAssessmentOption = (idx, optIdx, value) =>
-    setForm(f => ({
-      ...f,
-      assessments: f.assessments.map((a, i) => {
-        if (i !== idx) return a
-        return { ...a, options: a.options.map((o, oi) => oi === optIdx ? value : o) }
-      }),
-    }))
+  // ─── Assessment helpers (commented out) ─────────────────────────────────
+  // const addAssessment = () =>
+  //   setForm(f => ({ ...f, assessments: [...f.assessments, { question: '', options: ['', '', '', ''], answer: '' }] }))
+  // const removeAssessment = (idx) =>
+  //   setForm(f => ({ ...f, assessments: f.assessments.filter((_, i) => i !== idx) }))
+  // const setAssessmentField = (idx, field, value) =>
+  //   setForm(f => ({ ...f, assessments: f.assessments.map((a, i) => i === idx ? { ...a, [field]: value } : a) }))
+  // const setAssessmentOption = (idx, optIdx, value) =>
+  //   setForm(f => ({
+  //     ...f,
+  //     assessments: f.assessments.map((a, i) => {
+  //       if (i !== idx) return a
+  //       return { ...a, options: a.options.map((o, oi) => oi === optIdx ? value : o) }
+  //     }),
+  //   }))
 
   // ─── Video items (multiple per chapter) ────────────────────────────────────
   const updateVideoItem = (id, patch) =>
@@ -439,10 +436,9 @@ export default function Chapters() {
           </div>
         </div>
 
-        {/* ── Row 5: Assessments ── */}
+        {/* ── Row 5: Assessments (commented out) ──
         <div style={{ marginBottom: 14 }}>
 
-          {/* Header row with label + Add Question button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: form.assessments.length > 0 ? 10 : 0 }}>
             <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
               <ClipboardList size={15} color="var(--accent)" />
@@ -458,7 +454,6 @@ export default function Chapters() {
             </button>
           </div>
 
-          {/* Table — only visible once at least one question has been added */}
           {form.assessments.length > 0 && (
             <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
@@ -478,13 +473,9 @@ export default function Chapters() {
                   <tbody>
                     {form.assessments.map((a, idx) => (
                       <tr key={idx} style={{ borderTop: '1px solid var(--border)', background: idx % 2 === 0 ? 'transparent' : 'rgba(108,99,255,0.02)' }}>
-
-                        {/* # */}
                         <td style={{ padding: '8px 10px', textAlign: 'center', color: 'var(--text3)', fontSize: 12, fontWeight: 600 }}>
                           {idx + 1}
                         </td>
-
-                        {/* Question */}
                         <td style={{ padding: '7px 8px' }}>
                           <input
                             className="input"
@@ -494,8 +485,6 @@ export default function Chapters() {
                             onChange={e => setAssessmentField(idx, 'question', e.target.value)}
                           />
                         </td>
-
-                        {/* Options A–D */}
                         {a.options.map((opt, oi) => (
                           <td key={oi} style={{ padding: '7px 8px' }}>
                             <input
@@ -507,8 +496,6 @@ export default function Chapters() {
                             />
                           </td>
                         ))}
-
-                        {/* Correct Answer */}
                         <td style={{ padding: '7px 8px' }}>
                           <select
                             className="input"
@@ -522,8 +509,6 @@ export default function Chapters() {
                             ))}
                           </select>
                         </td>
-
-                        {/* Delete button */}
                         <td style={{ padding: '7px 10px', textAlign: 'center' }}>
                           <button
                             type="button"
@@ -543,6 +528,7 @@ export default function Chapters() {
             </div>
           )}
         </div>
+        ── End Assessments ── */}
 
         {/* ── Actions ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

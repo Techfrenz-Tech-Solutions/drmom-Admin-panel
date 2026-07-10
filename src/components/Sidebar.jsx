@@ -100,9 +100,9 @@ import AdminProfile from './AdminProfile'
 
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/courses', icon: BookOpen, label: 'Courses' },
   { to: '/classes', icon: GraduationCap, label: 'Classes' },
   { to: '/subjects', icon: BookMarked, label: 'Subjects' },
+  { to: '/courses', icon: BookOpen, label: 'Courses' },
   { to: '/chapters', icon: Layers, label: 'Chapters' },
   // { to: '/videos', icon: Video, label: 'Lesson Master' } — legacy, superseded by Chapters (Class > Subject > Course > Chapter)
   { to: '/prices', icon: DollarSign, label: 'Pricing' },
