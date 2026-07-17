@@ -23,7 +23,9 @@ export async function apiRequest(path, options = {}, _retry = false) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
 
-  if (response.status === 401) {
+  const isAuthEndpoint = path === "/auth/login" || path === "/auth/refresh";
+
+  if (response.status === 401 && !isAuthEndpoint) {
     if (!_retry) {
       try {
         if (!_refreshing) _refreshing = _refresh().finally(() => { _refreshing = null; });
