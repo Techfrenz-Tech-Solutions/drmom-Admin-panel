@@ -92,7 +92,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BookOpen, Video, Layers, BookMarked,
   DollarSign, Users, ChevronRight, GraduationCap,
-  ShoppingCart, UserCheck,
+  ShoppingCart, UserCheck, TrendingUp, Wallet, Mail, HardDrive,
 } from 'lucide-react'
 import './Sidebar.css'
 import Logo from '../Assets/Logo.png'
@@ -109,6 +109,10 @@ const nav = [
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders' },
   { to: '/enrollments', icon: UserCheck, label: 'Enrollments' },
+  { to: '/student-progress', icon: TrendingUp, label: 'Student Progress' },
+  { to: '/payment-tracker', icon: Wallet, label: 'Payment Tracker' },
+  { to: '/newsletter', icon: Mail, label: 'Newsletter' },
+  { to: '/storage', icon: HardDrive, label: 'Storage' },
 ]
  
 export default function Sidebar({ open, onClose }) {
@@ -142,7 +146,7 @@ export default function Sidebar({ open, onClose }) {
           ))}
 </nav>
  
-        <div className="sb-footer">
+        {/* <div className="sb-footer">
 <div className="sb-user" onClick={() => setShowProfile(true)} style={{ cursor: 'pointer' }}>
 <div className="sb-avatar">A</div>
 <div>
@@ -150,7 +154,7 @@ export default function Sidebar({ open, onClose }) {
 <div className="sb-uemail">admin@drmom.in</div>
 </div>
 </div>
-</div>
+</div> */}
 </aside>
  
       {showProfile && <AdminProfile onClose={() => setShowProfile(false)} />}
