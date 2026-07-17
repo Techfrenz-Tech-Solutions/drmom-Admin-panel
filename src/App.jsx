@@ -14,6 +14,10 @@ import Users from './pages/Users'
 import Courses from './pages/Courses'
 import Orders from './pages/Orders'
 import Enrollments from './pages/Enrollments'
+import StudentProgress from './pages/StudentProgress'
+import PaymentTracker from './pages/PaymentTracker'
+import Newsletter from './pages/Newsletter'
+import Storage from './pages/Storage'
 
 const PAGE_TITLES = {
   '/': 'Dashboard',
@@ -26,6 +30,10 @@ const PAGE_TITLES = {
   '/users': 'Users',
   '/orders': 'Orders',
   '/enrollments': 'Enrollments',
+  '/student-progress': 'Student Progress',
+  '/payment-tracker': 'Payment Tracker',
+  '/newsletter': 'Newsletter',
+  '/storage': 'Storage',
 }
 
 function ProtectedRoute({ children }) {
@@ -67,6 +75,10 @@ function Layout() {
             <Route path="/users" element={<Users />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/enrollments" element={<Enrollments />} />
+            <Route path="/student-progress" element={<StudentProgress />} />
+            <Route path="/payment-tracker" element={<PaymentTracker />} />
+            <Route path="/newsletter" element={<Newsletter />} />
+            <Route path="/storage" element={<Storage />} />
           </Routes>
         </main>
       </div>

@@ -87,32 +87,33 @@
 
 
 
-import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BookOpen, Video, Layers, BookMarked,
   DollarSign, Users, ChevronRight, GraduationCap,
-  ShoppingCart, UserCheck,
+  ShoppingCart, UserCheck, TrendingUp, Wallet, Mail, HardDrive,
 } from 'lucide-react'
 import './Sidebar.css'
 import Logo from '../Assets/Logo.png'
-import AdminProfile from './AdminProfile'
 
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/courses', icon: BookOpen, label: 'Courses' },
   { to: '/classes', icon: GraduationCap, label: 'Classes' },
   { to: '/subjects', icon: BookMarked, label: 'Subjects' },
+  { to: '/courses', icon: BookOpen, label: 'Courses' },
   { to: '/chapters', icon: Layers, label: 'Chapters' },
   // { to: '/videos', icon: Video, label: 'Lesson Master' } — legacy, superseded by Chapters (Class > Subject > Course > Chapter)
   { to: '/prices', icon: DollarSign, label: 'Pricing' },
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/orders', icon: ShoppingCart, label: 'Orders' },
   { to: '/enrollments', icon: UserCheck, label: 'Enrollments' },
+  { to: '/student-progress', icon: TrendingUp, label: 'Student Progress' },
+  { to: '/payment-tracker', icon: Wallet, label: 'Payment Tracker' },
+  { to: '/newsletter', icon: Mail, label: 'Newsletter' },
+  { to: '/storage', icon: HardDrive, label: 'Storage' },
 ]
  
 export default function Sidebar({ open, onClose }) {
-  const [showProfile, setShowProfile] = useState(false)
   return (
 <>
       {open && <div className="sb-overlay" onClick={onClose} />}
@@ -142,18 +143,7 @@ export default function Sidebar({ open, onClose }) {
           ))}
 </nav>
  
-        <div className="sb-footer">
-<div className="sb-user" onClick={() => setShowProfile(true)} style={{ cursor: 'pointer' }}>
-<div className="sb-avatar">A</div>
-<div>
-<div className="sb-uname">Admin</div>
-<div className="sb-uemail">admin@drmom.in</div>
-</div>
-</div>
-</div>
-</aside>
- 
-      {showProfile && <AdminProfile onClose={() => setShowProfile(false)} />}
-</>
+      </aside>
+    </>
   )
 }
