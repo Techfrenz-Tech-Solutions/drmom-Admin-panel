@@ -38,7 +38,7 @@
   flex-shrink: 0;
 }
 
-.sb-title { font-family: var(--font-head); font-size: 15px; font-weight: 800; color: var(--text); }
+.sb-title {  font-size: 15px; font-weight: 800; color: var(--text); }
 .sb-sub { font-size: 11px; color: var(--text3); font-weight: 500; }
 
 .sb-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }

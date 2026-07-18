@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, Eye, Play } from 'lucide-react'
+import { Plus, Edit2, Trash2, Layers, FileVideo, FileText, Eye, Play, ImagePlus, X } from 'lucide-react'
 import * as tus from 'tus-js-client'
 import { apiRequest, API_BASE_URL } from '../utils/api'
 import { classNames, loadAdminCatalog, subjectNames } from '../utils/adminData'
@@ -16,10 +16,12 @@ const emptyForm = {
   className: '',
   courseId: '',
   subjectName: '',
-  videos: [],                // [{ id, embedUrl, bunnyVideoId, title, status, pct, msg, file }]
-  materials: [],              // [{ id, storagePath, fileName, mimeType, size, previewUrl, status, msg }]
+  videos: [],
+  materials: [],
   playingVideoId: null,
-  assessments: [],           // empty = table hidden until "Add Question" clicked
+  assessments: [],
+  thumbnailFile: null,
+  thumbnailPreview: '',
 }
 
 export default function Chapters() {
@@ -35,6 +37,7 @@ export default function Chapters() {
   const replaceMaterialInputRef = useRef(null)
   const replaceVideoTargetId = useRef(null)
   const replaceMaterialTargetId = useRef(null)
+  const thumbnailInputRef = useRef(null)
 
   const load = async () => setCatalog(await loadAdminCatalog())
   useEffect(() => { load().catch((e) => setError(e.message)) }, [])
@@ -192,7 +195,7 @@ export default function Chapters() {
   // videos/materials are always sent as the complete current list — adds,
   // replaces, and deletes are all resolved client-side first, so the array
   // itself is the source of truth on save, not a patch.
-  const buildPayload = () => ({
+  const buildPayload = (thumbnailUrl) => ({
     code: form.chapterCode.trim(),
     title: form.chapterName.trim(),
     classLabel: form.className,
@@ -210,9 +213,19 @@ export default function Chapters() {
     assessments: form.assessments
       .filter(a => a.question.trim())
       .map(a => ({ question: a.question.trim(), options: a.options, answer: a.answer })),
+    ...(thumbnailUrl !== undefined && { thumbnailUrl }),
   })
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
+  const uploadThumbnail = async (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${API_BASE_URL}/admin/upload`, { method: 'POST', credentials: 'include', body: fd })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Thumbnail upload failed')
+    return data.url || data.fileUrl || data.path || null
+  }
+
   const handleCreate = async () => {
     if (!form.chapterCode.trim()) { setError('Chapter Code is required'); return }
     if (!form.chapterName.trim()) { setError('Chapter Name is required'); return }
@@ -220,7 +233,9 @@ export default function Chapters() {
     if (!form.subjectName) { setError('Subject Name is required'); return }
     setLoading(true)
     try {
-      const data = await apiRequest('/admin/chapters', { method: 'POST', body: JSON.stringify(buildPayload()) })
+      let thumbnailUrl
+      if (form.thumbnailFile) thumbnailUrl = await uploadThumbnail(form.thumbnailFile)
+      const data = await apiRequest('/admin/chapters', { method: 'POST', body: JSON.stringify(buildPayload(thumbnailUrl)) })
       setCatalog(prev => ({ ...prev, chapters: [...(prev.chapters || []), data.chapter] }))
       reset()
     } catch (e) { setError(e.message) } finally { setLoading(false) }
@@ -240,6 +255,8 @@ export default function Chapters() {
       assessments: ch.assessments?.length
         ? ch.assessments.map(a => ({ question: a.question, options: a.options || ['', '', '', ''], answer: a.answer || '' }))
         : [],
+      thumbnailFile: null,
+      thumbnailPreview: ch.thumbnailUrl || '',
     })
     setError('')
   }
@@ -250,7 +267,9 @@ export default function Chapters() {
     if (!form.subjectName) { setError('Subject Name is required'); return }
     setLoading(true)
     try {
-      const data = await apiRequest(`/admin/chapters/${editingId}`, { method: 'PUT', body: JSON.stringify(buildPayload()) })
+      let thumbnailUrl
+      if (form.thumbnailFile) thumbnailUrl = await uploadThumbnail(form.thumbnailFile)
+      const data = await apiRequest(`/admin/chapters/${editingId}`, { method: 'PUT', body: JSON.stringify(buildPayload(thumbnailUrl)) })
       setCatalog(prev => ({ ...prev, chapters: prev.chapters.map(c => c.id === editingId ? data.chapter : c) }))
       reset()
     } catch (e) { setError(e.message) } finally { setLoading(false) }
@@ -433,6 +452,53 @@ export default function Chapters() {
                 onChange={e => { handleAddMaterials(e.target.files); e.target.value = '' }} />
               <input ref={replaceMaterialInputRef} type="file" accept=".pdf,.doc,.docx" style={{ display: 'none' }} onChange={handleReplaceMaterialChange} />
             </div>
+          </div>
+        </div>
+
+        {/* ── Thumbnail Upload ── */}
+        <div style={{ marginBottom: 14 }}>
+          <label className="form-label">Chapter Thumbnail</label>
+          <div
+            style={{
+              border: '2px dashed var(--border)', borderRadius: 10, padding: '18px 14px',
+              textAlign: 'center', cursor: 'pointer',
+              background: (form.thumbnailFile || form.thumbnailPreview) ? 'rgba(108,99,255,0.06)' : 'transparent',
+              transition: 'background 0.2s',
+            }}
+            onClick={() => thumbnailInputRef.current?.click()}
+          >
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files[0] || null
+                set('thumbnailFile', file)
+                set('thumbnailPreview', file ? URL.createObjectURL(file) : form.thumbnailPreview)
+                e.target.value = ''
+              }}
+            />
+            {form.thumbnailPreview ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <img src={form.thumbnailPreview} alt="thumbnail preview" style={{ width: 72, height: 48, borderRadius: 6, objectFit: 'cover', border: '2px solid var(--border)' }} />
+                <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
+                  {form.thumbnailFile ? form.thumbnailFile.name : 'Current thumbnail'}
+                </span>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 0 }}
+                  onClick={e => { e.stopPropagation(); set('thumbnailFile', null); set('thumbnailPreview', '') }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <>
+                <ImagePlus size={26} color="var(--text3)" style={{ marginBottom: 6 }} />
+                <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload chapter thumbnail<br /><span style={{ fontSize: 11 }}>PNG, JPG, WEBP etc.</span></p>
+              </>
+            )}
           </div>
         </div>
 

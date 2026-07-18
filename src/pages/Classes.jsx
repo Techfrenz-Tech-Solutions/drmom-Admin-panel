@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react'
-import { GraduationCap, Plus, Edit2, Trash2 } from 'lucide-react'
-import { apiRequest } from '../utils/api'
+import { useEffect, useRef, useState } from 'react'
+import { GraduationCap, Plus, Edit2, Trash2, ImagePlus, X } from 'lucide-react'
+import { apiRequest, API_BASE_URL } from '../utils/api'
 import { loadAdminCatalog } from '../utils/adminData'
 
 export default function Classes() {
   const [classes, setClasses] = useState([])
   const [classCode, setClassCode] = useState('')
   const [className, setClassName] = useState('')
+  const [classImage, setClassImage] = useState(null)       // File object
+  const [classImagePreview, setClassImagePreview] = useState('')  // existing URL when editing
   const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const imageInputRef = useRef(null)
 
   const load = async () => {
     const data = await loadAdminCatalog()
@@ -21,13 +24,25 @@ export default function Classes() {
   const reset = () => {
     setClassCode('')
     setClassName('')
+    setClassImage(null)
+    setClassImagePreview('')
     setEditingId(null)
     setError('')
   }
 
-  const payload = () => ({
+  const uploadImage = async (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${API_BASE_URL}/admin/upload`, { method: 'POST', credentials: 'include', body: fd })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Image upload failed')
+    return data.url || data.fileUrl || data.path || null
+  }
+
+  const payload = (imageUrl) => ({
     code: classCode.trim(),
     name: className.trim(),
+    ...(imageUrl !== undefined && { imageUrl }),
     orderIndex: editingId ? classes.findIndex((item) => item.id === editingId) + 1 : classes.length + 1,
   })
 
@@ -36,7 +51,9 @@ export default function Classes() {
     if (!className.trim()) { setError('Class Name is required'); return }
     setLoading(true)
     try {
-      const data = await apiRequest('/admin/classes', { method: 'POST', body: JSON.stringify(payload()) })
+      let imageUrl
+      if (classImage) imageUrl = await uploadImage(classImage)
+      const data = await apiRequest('/admin/classes', { method: 'POST', body: JSON.stringify(payload(imageUrl)) })
       setClasses((prev) => [...prev, data.classLevel])
       reset()
     } catch (error) {
@@ -50,6 +67,8 @@ export default function Classes() {
     setEditingId(item.id)
     setClassCode(item.code || '')
     setClassName(item.name)
+    setClassImage(null)
+    setClassImagePreview(item.imageUrl || '')
     setError('')
   }
 
@@ -57,7 +76,9 @@ export default function Classes() {
     if (!className.trim()) { setError('Class Name is required'); return }
     setLoading(true)
     try {
-      const data = await apiRequest(`/admin/classes/${editingId}`, { method: 'PUT', body: JSON.stringify(payload()) })
+      let imageUrl
+      if (classImage) imageUrl = await uploadImage(classImage)
+      const data = await apiRequest(`/admin/classes/${editingId}`, { method: 'PUT', body: JSON.stringify(payload(imageUrl)) })
       setClasses((prev) => prev.map((item) => item.id === editingId ? data.classLevel : item))
       reset()
     } catch (error) {
@@ -87,27 +108,75 @@ export default function Classes() {
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ flex: '1 1 180px', marginBottom: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class Code</label>
             <input className="input" placeholder="e.g. CLS-001" value={classCode} onChange={e => { setClassCode(e.target.value); setError('') }} />
           </div>
-          <div className="form-group" style={{ flex: '1 1 220px', marginBottom: 0 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Class Name</label>
             <input className="input" placeholder="e.g. Grade 1" value={className} onChange={e => { setClassName(e.target.value); setError('') }} onKeyDown={e => e.key === 'Enter' && (editingId === null ? handleCreate() : handleUpdate())} />
           </div>
-          <div style={{ display: 'flex', gap: 10, paddingBottom: 0, alignItems: 'flex-end' }}>
-            {editingId === null ? (
-              <button className="btn btn-primary" onClick={handleCreate} disabled={loading}><Plus size={14} /> {loading ? 'Saving...' : 'Create'}</button>
+        </div>
+
+        {/* ── Upload Picture ── */}
+        <div style={{ marginBottom: 14 }}>
+          <label className="form-label">Class Picture</label>
+          <div
+            style={{
+              border: '2px dashed var(--border)', borderRadius: 10, padding: '18px 14px',
+              textAlign: 'center', cursor: 'pointer',
+              background: (classImage || classImagePreview) ? 'rgba(108,99,255,0.06)' : 'transparent',
+              transition: 'background 0.2s',
+            }}
+            onClick={() => imageInputRef.current?.click()}
+          >
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files[0] || null
+                setClassImage(file)
+                if (file) setClassImagePreview(URL.createObjectURL(file))
+                e.target.value = ''
+              }}
+            />
+            {classImagePreview ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <img src={classImagePreview} alt="preview" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', border: '2px solid var(--border)' }} />
+                <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
+                  {classImage ? classImage.name : 'Current image'}
+                </span>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 0 }}
+                  onClick={e => { e.stopPropagation(); setClassImage(null); setClassImagePreview('') }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
             ) : (
               <>
-                <button className="btn btn-primary" onClick={handleUpdate} disabled={loading}><Edit2 size={14} /> {loading ? 'Saving...' : 'Update'}</button>
-                <button className="btn btn-ghost" onClick={reset}>Cancel</button>
+                <ImagePlus size={26} color="var(--text3)" style={{ marginBottom: 6 }} />
+                <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>Click to upload class picture<br /><span style={{ fontSize: 11 }}>PNG, JPG, WEBP etc.</span></p>
               </>
             )}
           </div>
         </div>
-        {error && <div style={{ marginTop: 10, color: 'var(--red)', fontSize: 13 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {editingId === null ? (
+            <button className="btn btn-primary" onClick={handleCreate} disabled={loading}><Plus size={14} /> {loading ? 'Saving...' : 'Create'}</button>
+          ) : (
+            <>
+              <button className="btn btn-primary" onClick={handleUpdate} disabled={loading}><Edit2 size={14} /> {loading ? 'Saving...' : 'Update'}</button>
+              <button className="btn btn-ghost" onClick={reset}>Cancel</button>
+            </>
+          )}
+          {error && <span style={{ color: 'var(--red)', fontSize: 13 }}>{error}</span>}
+        </div>
       </div>
 
       <div className="card">
