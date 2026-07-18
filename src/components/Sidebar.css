@@ -1,5 +1,6 @@
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
 .sidebar {
-  width: var(--sidebar-w);
+  width: var(--sidebar-w);           /* 250px expanded */
   background: #ffffff;
   border-right: 1px solid var(--border);
   display: flex;
@@ -9,39 +10,57 @@
   position: sticky;
   top: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   z-index: 100;
   box-shadow: 4px 0 24px rgba(59,30,84,0.1);
+  transition: width 0.25s ease;
 }
 
+/* ── Collapsed (icon-only) ────────────────────────────────────────────────── */
+.sidebar.collapsed {
+  width: 64px;
+}
+
+/* ── Brand ────────────────────────────────────────────────────────────────── */
 .sb-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px 18px;
+  padding: 20px 12px;
   border-bottom: 1px solid var(--border);
+  min-height: 76px;
+  overflow: hidden;
 }
 
-.sb-logo {
-  width: 38px; height: 38px;
-  background: linear-gradient(135deg, #5E3D8F, #7B5EA7);
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-head);
-  font-weight: 800; font-size: 16px; color: #ffffff; flex-shrink: 0;
+.sidebar.collapsed .sb-brand {
+  justify-content: center;
+  padding: 14px 0;
 }
 
 .sb-logo-img {
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   border-radius: 10px;
   flex-shrink: 0;
 }
 
-.sb-title {  font-size: 15px; font-weight: 800; color: var(--text); }
-.sb-sub { font-size: 11px; color: var(--text3); font-weight: 500; }
+.sb-brand-text { overflow: hidden; }
+.sb-title { font-size: 15px; font-weight: 800; color: var(--text); white-space: nowrap; }
+.sb-sub   { font-size: 11px; color: var(--text3); font-weight: 500; white-space: nowrap; }
 
-.sb-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+/* ── Nav ──────────────────────────────────────────────────────────────────── */
+.sb-nav {
+  flex: 1;
+  padding: 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar.collapsed .sb-nav {
+  padding: 16px 4px;
+}
 
 .sb-section-label {
   font-size: 10px;
@@ -53,6 +72,7 @@
   margin-bottom: 6px;
 }
 
+/* ── Nav links ────────────────────────────────────────────────────────────── */
 .sb-link {
   display: flex;
   align-items: center;
@@ -65,59 +85,90 @@
   font-weight: 500;
   transition: all 0.15s;
   position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .sb-link {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .sb-link:hover { background: rgba(94,61,143,0.1); color: #3B1E54; }
 
 .sb-link.active {
   background: linear-gradient(90deg, rgba(94,61,143,0.15), rgba(155,126,189,0.07));
-  color: #3B1E54; font-weight: 600;
+  color: #3B1E54;
+  font-weight: 600;
   box-shadow: inset 3px 0 0 #5E3D8F;
+}
+
+.sidebar.collapsed .sb-link.active {
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+}
+
+.sb-icon { flex-shrink: 0; }
+
+.sb-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sb-arrow {
   margin-left: auto;
+  flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.15s;
 }
 .sb-link:hover .sb-arrow,
 .sb-link.active .sb-arrow { opacity: 1; }
 
-.sb-footer {
-  padding: 14px 16px;
-  border-top: 1px solid var(--border);
+/* ── Tooltip on collapsed icons ───────────────────────────────────────────── */
+.sidebar.collapsed .sb-link::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #3B1E54;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 200;
+}
+.sidebar.collapsed .sb-link:hover::after {
+  opacity: 1;
 }
 
-.sb-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sb-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: linear-gradient(135deg, #5E3D8F, #7B5EA7);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 13px; color: #ffffff; flex-shrink: 0;
-}
-
-.sb-uname { font-size: 13px; font-weight: 600; color: var(--text); }
-.sb-uemail { font-size: 11px; color: var(--text3); }
-
+/* ── Overlay (mobile) ─────────────────────────────────────────────────────── */
 .sb-overlay {
   display: none;
-  position: fixed; inset: 0;
+  position: fixed;
+  inset: 0;
   background: rgba(0,0,0,0.5);
   z-index: 99;
 }
 
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
-    left: 0; top: 0;
+    left: 0;
+    top: 0;
+    width: var(--sidebar-w) !important;   /* always full width on mobile */
     transform: translateX(-100%);
     transition: transform 0.25s ease;
   }
-  .sidebar.open { transform: translateX(0); }
+  .sidebar.open {
+    transform: translateX(0);
+  }
   .sb-overlay { display: block; }
 }

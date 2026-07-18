@@ -1,16 +1,21 @@
 import { useState } from 'react'
-import { Menu, Bell, Search } from 'lucide-react'
+import { Menu, Bell } from 'lucide-react'
 import './Topbar.css'
 import AdminProfile from './AdminProfile'
 
-export default function Topbar({ onMenuClick, title }) {
+export default function Topbar({ onMenuClick, onCollapseClick, title }) {
   const [showProfile, setShowProfile] = useState(false)
 
   return (
     <>
       <header className="topbar">
         <div className="topbar-left">
-          <button className="menu-btn" onClick={onMenuClick}>
+          {/* Desktop: collapse/expand sidebar labels */}
+          <button className="menu-btn menu-btn-desktop" onClick={onCollapseClick} title="Toggle sidebar">
+            <Menu size={20} />
+          </button>
+          {/* Mobile: open sidebar overlay */}
+          <button className="menu-btn menu-btn-mobile" onClick={onMenuClick} title="Open menu">
             <Menu size={20} />
           </button>
           <span className="topbar-title">{title}</span>
@@ -20,7 +25,7 @@ export default function Topbar({ onMenuClick, title }) {
             <Bell size={17} />
             <span className="notif-dot" />
           </button>
-          <div className="topbar-avatar" onClick={() => setShowProfile(true)} style={{ cursor: 'pointer' }}>A</div>
+          <div className="topbar-avatar" onClick={() => setShowProfile(true)}>A</div>
         </div>
       </header>
 

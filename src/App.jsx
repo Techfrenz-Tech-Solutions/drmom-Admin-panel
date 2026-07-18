@@ -15,6 +15,7 @@ import Courses from './pages/Courses'
 import Orders from './pages/Orders'
 import Enrollments from './pages/Enrollments'
 import StudentProgress from './pages/StudentProgress'
+import StudentDashboard from './pages/StudentDashboard'
 import PaymentTracker from './pages/PaymentTracker'
 import Newsletter from './pages/Newsletter'
 import Storage from './pages/Storage'
@@ -47,9 +48,11 @@ function PublicRoute({ children }) {
 }
 
 function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)       // mobile overlay
+  const [collapsed, setCollapsed] = useState(false)            // desktop collapse
   const location = useLocation()
-  const title = PAGE_TITLES[location.pathname] || 'Admin'
+  const title = PAGE_TITLES[location.pathname]
+    || (location.pathname.startsWith('/student-progress/') ? 'Student Dashboard' : 'Admin')
   const mainRef = useRef(null)
 
   useEffect(() => {
@@ -60,9 +63,13 @@ function Layout() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Topbar onMenuClick={() => setSidebarOpen(true)} title={title} />
+      <Sidebar open={sidebarOpen} collapsed={collapsed} onClose={() => setSidebarOpen(false)} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        <Topbar
+          title={title}
+          onMenuClick={() => setSidebarOpen(true)}
+          onCollapseClick={() => setCollapsed(c => !c)}
+        />
         <main ref={mainRef} style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -76,6 +83,7 @@ function Layout() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/enrollments" element={<Enrollments />} />
             <Route path="/student-progress" element={<StudentProgress />} />
+            <Route path="/student-progress/:id" element={<StudentDashboard />} />
             <Route path="/payment-tracker" element={<PaymentTracker />} />
             <Route path="/newsletter" element={<Newsletter />} />
             <Route path="/storage" element={<Storage />} />

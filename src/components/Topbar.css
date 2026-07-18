@@ -16,10 +16,23 @@
 .topbar-left { display: flex; align-items: center; gap: 14px; }
 
 .menu-btn {
-  background: none; color: #3D1A66; padding: 6px;
-  border-radius: var(--radius-sm); display: none; transition: color 0.2s;
+  background: none;
+  color: #3D1A66;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background 0.2s;
+  flex-shrink: 0;
 }
 .menu-btn:hover { color: #3B1E54; background: rgba(94,61,143,0.1); }
+
+/* Desktop burger — always visible, collapses sidebar labels */
+.menu-btn-desktop { display: flex; }
+
+/* Mobile burger — opens overlay, hidden on desktop */
+.menu-btn-mobile { display: none; }
 
 .topbar-title {
   font-family: var(--font-head);
@@ -33,6 +46,7 @@
 .topbar-icon-btn {
   background: none; color: #3D1A66; padding: 7px;
   border-radius: var(--radius-sm); position: relative; transition: color 0.2s;
+  display: flex; align-items: center; justify-content: center;
 }
 .topbar-icon-btn:hover { color: #3B1E54; background: rgba(94,61,143,0.1); }
 
@@ -54,5 +68,6 @@
 .topbar-avatar:hover { transform: scale(1.08); box-shadow: 0 4px 16px rgba(94,61,143,0.42); }
 
 @media (max-width: 768px) {
-  .menu-btn { display: flex; }
+  .menu-btn-desktop { display: none; }
+  .menu-btn-mobile  { display: flex; }
 }
